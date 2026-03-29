@@ -1,19 +1,24 @@
-name: nono_music
-description: A new Flutter project.
+name: demus
+description: Nono Music - lecteur musical personnel
+
+publish_to: 'none'
+
 version: 1.0.0+1
 
 environment:
-  sdk: ">=2.18.0 <3.0.0"
+  sdk: '>=3.0.0 <4.0.0'
 
 dependencies:
   flutter:
     sdk: flutter
-  provider: ^6.0.0 # Assurez-vous que c'est la version correcte
-  youtube_explode_dart: ^1.0.0 # Ajoutez cette ligne
+  provider: ^6.1.0
+  http: ^1.2.0              # ← Ajouté pour appeler le backend Node.js
+  # youtube_explode_dart supprimé (on passe par le backend)
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_lints: ^3.0.0
 
 flutter:
   uses-material-design: true
