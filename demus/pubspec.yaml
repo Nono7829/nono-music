@@ -1,0 +1,19 @@
+name: nono_music
+description: A new Flutter project.
+version: 1.0.0+1
+
+environment:
+  sdk: ">=2.18.0 <3.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  provider: ^6.0.0 # Assurez-vous que c'est la version correcte
+  youtube_explode_dart: ^1.0.0 # Ajoutez cette ligne
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
