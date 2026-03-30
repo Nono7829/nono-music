@@ -19,6 +19,7 @@ class _MainNavigationState extends State<MainNavigation> {
 
   final List<Widget> _screens = const [
     HomeScreen(),
+    Scaffold(body: Center(child: Text('Explorer - Bientôt disponible', style: TextStyle(color: Colors.grey)))),
     SearchScreen(),
     LibraryScreen(),
   ];
@@ -80,16 +81,22 @@ class _MainNavigationState extends State<MainNavigation> {
                 onTap: () => setState(() => _currentIndex = 0),
               ),
               _NavItem(
-                icon: Icons.search_rounded,
-                label: 'Chercher',
+                icon: Icons.grid_view_rounded,
+                label: 'Explorer',
                 selected: _currentIndex == 1,
                 onTap: () => setState(() => _currentIndex = 1),
               ),
               _NavItem(
-                icon: Icons.library_music_rounded,
-                label: 'Bibliothèque',
+                icon: Icons.search_rounded,
+                label: 'Recherche',
                 selected: _currentIndex == 2,
                 onTap: () => setState(() => _currentIndex = 2),
+              ),
+              _NavItem(
+                icon: Icons.library_music_rounded,
+                label: 'Bibliothèque',
+                selected: _currentIndex == 3,
+                onTap: () => setState(() => _currentIndex = 3),
               ),
             ],
           ),

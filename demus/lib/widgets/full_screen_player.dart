@@ -1,9 +1,18 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/music_provider.dart';
+import 'song_options_menu.dart';
 
 class FullScreenPlayer extends StatelessWidget {
   const FullScreenPlayer({super.key});
+
+  String _formatDuration(Duration d) {
+    if (d.inMilliseconds < 0) return "--:--";
+    final m = d.inMinutes;
+    final s = d.inSeconds % 60;
+    return '$m:${s.toString().padLeft(2, '0')}';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -13,11 +22,21 @@ class FullScreenPlayer extends StatelessWidget {
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.92,
-      decoration: const BoxDecoration(
-        color: Color(0xFF1C1C1E),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: Column(
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Image.network(
+              song.coverUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFF1C1C1E)),
+            ),
+            BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 60.0, sigmaY: 60.0),
+              child: const ColoredBox(color: Colors.black54),
+            ),
+            Column(
         children: [
           // Handle
           const SizedBox(height: 12),
@@ -49,7 +68,7 @@ class FullScreenPlayer extends StatelessWidget {
                         fontWeight: FontWeight.w500)),
                 IconButton(
                   icon: const Icon(Icons.more_horiz, color: Colors.grey),
-                  onPressed: () {},
+                  onPressed: () => showSongOptionsMenu(context, song),
                 ),
               ],
             ),
@@ -120,30 +139,51 @@ class FullScreenPlayer extends StatelessWidget {
             ),
           ),
 
-          // Barre de progression simulée
+          // Barre de progression réelle
           Padding(
             padding: const EdgeInsets.fromLTRB(32, 24, 32, 0),
-            child: Column(
-              children: [
-                SliderTheme(
-                  data: SliderTheme.of(context).copyWith(
-                    trackHeight: 3,
-                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                    overlayShape: SliderComponentShape.noOverlay,
-                    activeTrackColor: Colors.white,
-                    inactiveTrackColor: Colors.white24,
-                    thumbColor: Colors.white,
-                  ),
-                  child: Slider(value: 0.3, onChanged: (_) {}),
-                ),
-                const Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: StreamBuilder<PositionData>(
+              stream: provider.positionDataStream,
+              builder: (context, snapshot) {
+                final positionData = snapshot.data;
+                final position = positionData?.position ?? Duration.zero;
+                final duration = positionData?.duration ?? Duration.zero;
+
+                double sliderValue = 0.0;
+                if (duration.inMilliseconds > 0) {
+                  sliderValue = position.inMilliseconds / duration.inMilliseconds;
+                }
+
+                return Column(
                   children: [
-                    Text('1:12', style: TextStyle(color: Colors.grey, fontSize: 11)),
-                    Text('-2:34', style: TextStyle(color: Colors.grey, fontSize: 11)),
+                    SliderTheme(
+                      data: SliderTheme.of(context).copyWith(
+                        trackHeight: 3,
+                        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                        overlayShape: SliderComponentShape.noOverlay,
+                        activeTrackColor: Colors.white,
+                        inactiveTrackColor: Colors.white24,
+                        thumbColor: Colors.white,
+                      ),
+                      child: Slider(
+                        value: sliderValue.clamp(0.0, 1.0),
+                        onChanged: (value) {
+                          final newPosition = Duration(
+                              milliseconds: (value * duration.inMilliseconds).round());
+                          provider.audioPlayer.seek(newPosition);
+                        },
+                      ),
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(_formatDuration(position), style: const TextStyle(color: Colors.grey, fontSize: 11)),
+                        Text('-${_formatDuration(duration - position)}', style: const TextStyle(color: Colors.grey, fontSize: 11)),
+                      ],
+                    ),
                   ],
-                ),
-              ],
+                );
+              },
             ),
           ),
 
@@ -160,7 +200,7 @@ class FullScreenPlayer extends StatelessWidget {
                 IconButton(
                   icon: const Icon(Icons.skip_previous_rounded,
                       color: Colors.white, size: 40),
-                  onPressed: () {},
+                  onPressed: provider.playPrevious,
                 ),
                 // Play / Pause
                 GestureDetector(
@@ -184,7 +224,7 @@ class FullScreenPlayer extends StatelessWidget {
                 IconButton(
                   icon: const Icon(Icons.skip_next_rounded,
                       color: Colors.white, size: 40),
-                  onPressed: () {},
+                  onPressed: provider.playNext,
                 ),
                 IconButton(
                   icon: const Icon(Icons.repeat_rounded, color: Colors.grey, size: 22),
@@ -194,23 +234,34 @@ class FullScreenPlayer extends StatelessWidget {
             ),
           ),
 
-          // Volume
+          // Volume réel
           Padding(
             padding: const EdgeInsets.fromLTRB(32, 20, 32, 0),
             child: Row(
               children: [
                 const Icon(Icons.volume_down_rounded, color: Colors.grey, size: 18),
                 Expanded(
-                  child: SliderTheme(
-                    data: SliderTheme.of(context).copyWith(
-                      trackHeight: 3,
-                      thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                      overlayShape: SliderComponentShape.noOverlay,
-                      activeTrackColor: Colors.grey,
-                      inactiveTrackColor: Colors.white12,
-                      thumbColor: Colors.grey,
-                    ),
-                    child: Slider(value: 0.7, onChanged: (_) {}),
+                  child: StreamBuilder<double>(
+                    stream: provider.audioPlayer.volumeStream,
+                    builder: (context, snapshot) {
+                      final volume = snapshot.data ?? 1.0;
+                      return SliderTheme(
+                        data: SliderTheme.of(context).copyWith(
+                          trackHeight: 3,
+                          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                          overlayShape: SliderComponentShape.noOverlay,
+                          activeTrackColor: Colors.grey,
+                          inactiveTrackColor: Colors.white12,
+                          thumbColor: Colors.grey,
+                        ),
+                        child: Slider(
+                          value: volume,
+                          onChanged: (val) {
+                            provider.audioPlayer.setVolume(val);
+                          },
+                        ),
+                      );
+                    },
                   ),
                 ),
                 const Icon(Icons.volume_up_rounded, color: Colors.grey, size: 18),
@@ -220,6 +271,9 @@ class FullScreenPlayer extends StatelessWidget {
 
           const SizedBox(height: 32),
         ],
+            ),
+          ],
+        ),
       ),
     );
   }

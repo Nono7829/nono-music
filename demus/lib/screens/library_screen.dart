@@ -55,9 +55,9 @@ class LibraryScreen extends StatelessWidget {
                     _QuickLink(
                       icon: Icons.download_rounded,
                       label: 'Téléchargés',
-                      count: 0,
+                      count: provider.downloadedSongs.length,
                       color: const Color(0xFF30D158),
-                      onTap: () {},
+                      onTap: () => _showDownloadedSheet(context, provider),
                     ),
                   ],
                 ),
@@ -153,6 +153,15 @@ class LibraryScreen extends StatelessWidget {
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (_) => _FavoritesSheet(songs: provider.favoriteSongs),
+    );
+  }
+  void _showDownloadedSheet(BuildContext context, MusicProvider provider) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1C1C1E),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => _DownloadedSheet(songs: provider.downloadedSongs),
     );
   }
 }
@@ -302,6 +311,61 @@ class _FavoritesSheet extends StatelessWidget {
             },
           ),
         ),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+}
+
+class _DownloadedSheet extends StatelessWidget {
+  final List<Song> songs;
+  const _DownloadedSheet({required this.songs});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox(height: 12),
+        Container(
+            width: 36, height: 4,
+            decoration: BoxDecoration(
+                color: Colors.grey[600],
+                borderRadius: BorderRadius.circular(4))),
+        const SizedBox(height: 16),
+        const Text('Titres Téléchargés',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+        const Divider(color: Colors.white12, height: 24),
+        if (songs.isEmpty)
+          const Padding(
+            padding: EdgeInsets.all(20),
+            child: Text('Aucun titre téléchargé.', style: TextStyle(color: Colors.grey)),
+          )
+        else
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 400),
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: songs.length,
+              itemBuilder: (_, i) {
+                final s = songs[i];
+                return ListTile(
+                  leading: ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: Image.network(s.coverUrl, width: 44, height: 44, fit: BoxFit.cover, errorBuilder: (_,__,___) => const Icon(Icons.music_note)),
+                  ),
+                  title: Text(s.title, maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 13, color: Color(0xFF30D158))),
+                  subtitle: Text(s.artist, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                  trailing: const Icon(Icons.file_download_done, color: Color(0xFF30D158)),
+                  onTap: () {
+                    context.read<MusicProvider>().playSong(s);
+                    Navigator.pop(context);
+                  },
+                );
+              },
+            ),
+          ),
         const SizedBox(height: 16),
       ],
     );

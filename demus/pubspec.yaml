@@ -13,6 +13,12 @@ dependencies:
     sdk: flutter
   provider: ^6.1.0
   http: ^1.2.0              # ← Ajouté pour appeler le backend Node.js
+  just_audio: ^0.10.0
+  just_audio_windows: 0.2.2
+  rxdart: ^0.27.7
+  path_provider: ^2.1.2
+  shared_preferences: ^2.2.2
+  dio: ^5.4.1
   # youtube_explode_dart supprimé (on passe par le backend)
 
 dev_dependencies:

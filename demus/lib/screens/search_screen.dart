@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../services/music_provider.dart';
 import '../models/song.dart';
 import '../widgets/full_screen_player.dart';
+import '../widgets/song_options_menu.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -174,20 +175,39 @@ class _SearchResultTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<MusicProvider>();
+    final isDownloaded = provider.isDownloaded(song);
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(vertical: 4),
-      leading: ClipRRect(
-        borderRadius: BorderRadius.circular(6),
-        child: song.coverUrl.isNotEmpty
-            ? Image.network(
-                song.coverUrl,
-                width: 52,
-                height: 52,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => _placeholder(),
-              )
-            : _placeholder(),
+      leading: Stack(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: song.coverUrl.isNotEmpty
+                ? Image.network(
+                    song.coverUrl,
+                    width: 52,
+                    height: 52,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => _placeholder(),
+                  )
+                : _placeholder(),
+          ),
+          if (isDownloaded)
+            Positioned(
+              bottom: 0,
+              right: 0,
+              child: Container(
+                width: 18,
+                height: 18,
+                decoration: const BoxDecoration(
+                  color: Color(0xFF30D158),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.download_done_rounded, size: 11, color: Colors.black),
+              ),
+            ),
+        ],
       ),
       title: Text(song.title,
           maxLines: 1,
@@ -200,26 +220,12 @@ class _SearchResultTile extends StatelessWidget {
             : song.artist,
         style: const TextStyle(color: Colors.grey, fontSize: 12),
       ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton(
-            icon: Icon(
-              provider.isFavorite(song)
-                  ? Icons.favorite
-                  : Icons.favorite_border,
-              color: provider.isFavorite(song)
-                  ? const Color(0xFFFF2D55)
-                  : Colors.grey,
-              size: 20,
-            ),
-            onPressed: () => provider.toggleFavorite(song),
-          ),
-          const Icon(Icons.play_arrow_rounded, color: Colors.grey),
-        ],
+      trailing: IconButton(
+        icon: const Icon(Icons.more_vert_rounded, color: Colors.grey, size: 20),
+        onPressed: () => showSongOptionsMenu(context, song),
       ),
       onTap: () {
-        provider.playSong(song);
+        provider.playSong(song, queue: provider.songs);
         showModalBottomSheet(
           context: context,
           isScrollControlled: true,
@@ -227,6 +233,7 @@ class _SearchResultTile extends StatelessWidget {
           builder: (_) => const FullScreenPlayer(),
         );
       },
+      onLongPress: () => showSongOptionsMenu(context, song),
     );
   }
 }

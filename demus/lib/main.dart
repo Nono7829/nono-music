@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import 'services/music_provider.dart';
 import 'screens/main_navigation.dart';
 
+final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
+
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
@@ -24,6 +26,7 @@ class NonoMusicApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      scaffoldMessengerKey: scaffoldMessengerKey,
       title: 'Nono Music',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
