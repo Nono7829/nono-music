@@ -19,35 +19,37 @@ class PositionData {
 class MusicProvider with ChangeNotifier {
   static const String _baseUrl = 'http://localhost:3000';
 
+  // ── Clés SharedPreferences ─────────────────────────────────────────────────
+  static const _kPlaylists      = 'nono_playlists';
+  static const _kFavorites      = 'nono_favorites';
+  static const _kRecentlyPlayed = 'nono_recently_played';
+  static const _kDownloads      = 'downloaded_songs';
+
   // ── Recherche ──────────────────────────────────────────────────────────────
-  List<Song> _songs        = [];
-  bool _isLoading          = false;
+  List<Song> _songs       = [];
+  bool _isLoading         = false;
   String? _errorMessage;
 
   // ── Lecture ────────────────────────────────────────────────────────────────
   Song?      _currentSong;
   List<Song> _queue        = [];
   int        _currentIndex = -1;
+  int        _loadId       = 0;
+  bool       _isPlaying    = false;
+  bool       _isAudioLoading = false;
 
-  // _loadId : incrémenté à chaque playSong().
-  // Chaque tâche mémorise son propre id ; si elle découvre que _loadId a changé
-  // (un appel plus récent est arrivé), elle abandonne sans toucher à l'état.
-  int  _loadId        = 0;
-  bool _isPlaying     = false;
-  bool _isAudioLoading = false;
+  // ── Bibliothèque (persistées) ─────────────────────────────────────────────
+  List<Song>                   _favoriteSongs  = [];
+  List<Song>                   _recentlyPlayed = [];
+  List<Map<String, dynamic>>   _playlists      = [];
 
   // ── Téléchargements ────────────────────────────────────────────────────────
   List<Song>           _downloadedSongs   = [];
   final Map<String, double> _downloadProgress = {};
 
-  // ── Bibliothèque ───────────────────────────────────────────────────────────
-  final List<Song>              _favoriteSongs  = [];
-  final List<Song>              _recentlyPlayed = [];
-  final List<Map<String, dynamic>> _playlists  = [];
-
   final AudioPlayer _player = AudioPlayer();
 
-  // ── Stream position (pour la barre de progression) ────────────────────────
+  // ── Stream position ────────────────────────────────────────────────────────
   Stream<PositionData> get positionDataStream =>
       Rx.combineLatest3<Duration, Duration, Duration?, PositionData>(
         _player.positionStream,
@@ -59,23 +61,22 @@ class MusicProvider with ChangeNotifier {
   AudioPlayer get audioPlayer => _player;
 
   // ── Getters ────────────────────────────────────────────────────────────────
-  List<Song>  get songs          => _songs;
-  bool        get isLoading      => _isLoading;
-  String?     get errorMessage   => _errorMessage;
-  Song?       get currentSong    => _currentSong;
-  bool        get isPlaying      => _isPlaying;
-  bool        get isAudioLoading => _isAudioLoading;
-  List<Song>  get favoriteSongs  => _favoriteSongs;
-  List<Song>  get recentlyPlayed => _recentlyPlayed;
+  List<Song>  get songs           => _songs;
+  bool        get isLoading       => _isLoading;
+  String?     get errorMessage    => _errorMessage;
+  Song?       get currentSong     => _currentSong;
+  bool        get isPlaying       => _isPlaying;
+  bool        get isAudioLoading  => _isAudioLoading;
+  List<Song>  get favoriteSongs   => _favoriteSongs;
+  List<Song>  get recentlyPlayed  => _recentlyPlayed;
   List<Song>  get downloadedSongs => _downloadedSongs;
   Map<String, double> get downloadProgress => _downloadProgress;
   List<Map<String, dynamic>> get playlists => _playlists;
 
   // ── Constructeur ───────────────────────────────────────────────────────────
   MusicProvider() {
-    _initDownloads();
+    _loadAllData();
 
-    // Écoute la fin de piste — logique simplifiée, pas de flag bloquant.
     _player.processingStateStream.listen((state) {
       if (state == ProcessingState.completed) {
         _isPlaying = false;
@@ -84,7 +85,6 @@ class MusicProvider with ChangeNotifier {
       }
     });
 
-    // Synchronise _isPlaying avec l'état réel du player (pause externe, etc.)
     _player.playingStream.listen((playing) {
       if (!_isAudioLoading && _isPlaying != playing) {
         _isPlaying = playing;
@@ -93,40 +93,105 @@ class MusicProvider with ChangeNotifier {
     });
   }
 
-  // ── Persistance des téléchargements ───────────────────────────────────────
-  Future<void> _initDownloads() async {
+  // ── Sérialisation Song ─────────────────────────────────────────────────────
+  static Map<String, dynamic> _songToJson(Song s) => {
+    'id': s.id, 'title': s.title, 'artist': s.artist,
+    'duration': s.duration, 'coverUrl': s.coverUrl,
+  };
+
+  static Song _songFromJson(Map<String, dynamic> j) => Song(
+    id:       j['id']       as String,
+    title:    j['title']    as String,
+    artist:   j['artist']   as String,
+    duration: (j['duration'] as num?)?.toInt() ?? 0,
+    coverUrl: (j['coverUrl'] as String?) ?? '',
+  );
+
+  // ── Chargement complet au démarrage ───────────────────────────────────────
+  Future<void> _loadAllData() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString('downloaded_songs');
-    if (raw == null) return;
     try {
-      final list = jsonDecode(raw) as List;
-      _downloadedSongs = list.map((j) => Song(
-        id:       j['id']       as String,
-        title:    j['title']    as String,
-        artist:   j['artist']   as String,
-        duration: (j['duration'] as num).toInt(),
-        coverUrl: (j['coverUrl'] as String?) ?? '',
-      )).toList();
+      // Favoris
+      final favRaw = prefs.getString(_kFavorites);
+      if (favRaw != null) {
+        _favoriteSongs = (jsonDecode(favRaw) as List)
+            .map((j) => _songFromJson(j as Map<String, dynamic>))
+            .toList();
+      }
+
+      // Récemment joués
+      final recRaw = prefs.getString(_kRecentlyPlayed);
+      if (recRaw != null) {
+        _recentlyPlayed = (jsonDecode(recRaw) as List)
+            .map((j) => _songFromJson(j as Map<String, dynamic>))
+            .toList();
+      }
+
+      // Playlists
+      final plRaw = prefs.getString(_kPlaylists);
+      if (plRaw != null) {
+        final decoded = jsonDecode(plRaw) as List;
+        _playlists = decoded.map((pl) {
+          final songs = (pl['songs'] as List? ?? [])
+              .map((s) => _songFromJson(s as Map<String, dynamic>))
+              .toList();
+          return {
+            'id':    pl['id']   as String,
+            'name':  pl['name'] as String,
+            'songs': songs,
+          };
+        }).cast<Map<String, dynamic>>().toList();
+      }
+
+      // Téléchargements
+      final dlRaw = prefs.getString(_kDownloads);
+      if (dlRaw != null) {
+        _downloadedSongs = (jsonDecode(dlRaw) as List)
+            .map((j) => _songFromJson(j as Map<String, dynamic>))
+            .toList();
+      }
+
       notifyListeners();
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[PREFS] Erreur chargement : $e');
+    }
+  }
+
+  // ── Sauvegarde sélective ───────────────────────────────────────────────────
+  Future<void> _saveFavorites() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kFavorites,
+        jsonEncode(_favoriteSongs.map(_songToJson).toList()));
+  }
+
+  Future<void> _saveRecentlyPlayed() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kRecentlyPlayed,
+        jsonEncode(_recentlyPlayed.map(_songToJson).toList()));
+  }
+
+  Future<void> _savePlaylists() async {
+    final prefs = await SharedPreferences.getInstance();
+    final data = _playlists.map((pl) => {
+      'id':    pl['id'],
+      'name':  pl['name'],
+      'songs': (pl['songs'] as List<Song>).map(_songToJson).toList(),
+    }).toList();
+    await prefs.setString(_kPlaylists, jsonEncode(data));
   }
 
   Future<void> _saveDownloads() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('downloaded_songs', jsonEncode(
-      _downloadedSongs.map((s) => {
-        'id': s.id, 'title': s.title, 'artist': s.artist,
-        'duration': s.duration, 'coverUrl': s.coverUrl,
-      }).toList(),
-    ));
+    await prefs.setString(_kDownloads,
+        jsonEncode(_downloadedSongs.map(_songToJson).toList()));
   }
 
   // ── Recherche ──────────────────────────────────────────────────────────────
   Future<void> searchYouTube(String query) async {
     if (query.trim().isEmpty) return;
-    _isLoading     = true;
-    _errorMessage  = null;
-    _songs         = [];
+    _isLoading    = true;
+    _errorMessage = null;
+    _songs        = [];
     notifyListeners();
 
     try {
@@ -164,41 +229,33 @@ class MusicProvider with ChangeNotifier {
   }
 
   // ── LECTURE ────────────────────────────────────────────────────────────────
-  //
-  // Logique simplifiée :
-  //  • myId = ++_loadId  invalide tous les chargements antérieurs.
-  //  • Après chaque await, on vérifie `myId != _loadId` → abandon silencieux.
-  //  • Plus de _isChangingSong : le listener processingStateStream peut
-  //    toujours s'exécuter ; s'il déclenche playNext() pendant un chargement
-  //    en cours, playNext incrémente _loadId et annule le précédent.
-  //
   Future<void> playSong(Song song, {List<Song>? queue}) async {
     final myId = ++_loadId;
 
-    // ── Mise à jour de la file ───────────────────────────────────────────
     _currentSong = song;
-    final sourceQueue = queue ?? ((_songs.isNotEmpty) ? _songs : [song]);
+    final sourceQueue = queue ?? (_songs.isNotEmpty ? _songs : [song]);
     _queue = List.from(sourceQueue);
     _currentIndex = _queue.indexWhere((s) => s.id == song.id);
     if (_currentIndex == -1) { _queue = [song]; _currentIndex = 0; }
 
     _isPlaying      = true;
     _isAudioLoading = true;
+
+    // Historique
     _recentlyPlayed.removeWhere((s) => s.id == song.id);
     _recentlyPlayed.insert(0, song);
-    if (_recentlyPlayed.length > 20) _recentlyPlayed.removeLast();
+    if (_recentlyPlayed.length > 30) _recentlyPlayed.removeLast();
+    _saveRecentlyPlayed();
+
     notifyListeners();
 
     try {
-      // 1. Arrêter l'audio en cours
       await _player.stop();
       if (myId != _loadId) return;
 
-      // 2. Déterminer la source (local ou proxy)
-      final String audioSource = await _resolveSource(song);
+      final audioSource = await _resolveSource(song);
       if (myId != _loadId) return;
 
-      // 3. Charger la source dans le player
       if (audioSource.startsWith('http')) {
         await _player.setUrl(audioSource);
       } else {
@@ -212,7 +269,6 @@ class MusicProvider with ChangeNotifier {
       }
       if (myId != _loadId) return;
 
-      // 4. Lancer
       _isAudioLoading = false;
       notifyListeners();
       await _player.play();
@@ -227,32 +283,24 @@ class MusicProvider with ChangeNotifier {
     }
   }
 
-  /// Retourne le chemin local s'il existe, sinon l'URL du proxy.
   Future<String> _resolveSource(Song song) async {
     try {
       final dir   = await getApplicationDocumentsDirectory();
       final local = File('${dir.path}/${song.id}.m4a');
       if (await local.exists()) {
         final size = await local.length();
-        if (size > 50000) {
-          debugPrint('[FLUTTER] source locale : ${song.id} ($size bytes)');
-          return local.path;
-        }
-        // Fichier incomplet → supprimer et retomber sur le proxy
+        if (size > 50000) return local.path;
         await local.delete();
         _downloadedSongs.removeWhere((s) => s.id == song.id);
         _saveDownloads();
       }
     } catch (_) {}
-    debugPrint('[FLUTTER] source proxy : $_baseUrl/proxy/${song.id}');
     return '$_baseUrl/proxy/${song.id}';
   }
 
   // ── Contrôles ──────────────────────────────────────────────────────────────
-
   void togglePlayPause() {
     if (_isAudioLoading) return;
-
     if (_isPlaying) {
       _player.pause();
       _isPlaying = false;
@@ -262,7 +310,6 @@ class MusicProvider with ChangeNotifier {
         _player.play();
         _isPlaying = true;
       } else if (ps == ProcessingState.completed) {
-        // Rembobiner et relire
         _player.seek(Duration.zero);
         _player.play();
         _isPlaying = true;
@@ -284,10 +331,7 @@ class MusicProvider with ChangeNotifier {
 
   void playPrevious() {
     if (_currentSong == null) return;
-    // < 3s écoulées → chanson précédente ; sinon → rembobiner
-    if (_player.position.inSeconds < 3 &&
-        _currentIndex > 0 &&
-        _queue.isNotEmpty) {
+    if (_player.position.inSeconds < 3 && _currentIndex > 0) {
       playSong(_queue[_currentIndex - 1], queue: _queue);
     } else {
       _player.seek(Duration.zero);
@@ -301,62 +345,86 @@ class MusicProvider with ChangeNotifier {
     }
   }
 
-  // ── Favoris ────────────────────────────────────────────────────────────────
+  // ── Favoris (persistés) ───────────────────────────────────────────────────
   void toggleFavorite(Song song) {
     if (_favoriteSongs.any((s) => s.id == song.id)) {
       _favoriteSongs.removeWhere((s) => s.id == song.id);
     } else {
       _favoriteSongs.add(song);
     }
+    _saveFavorites();
     notifyListeners();
   }
 
-  bool isFavorite(Song song) =>
-      _favoriteSongs.any((s) => s.id == song.id);
+  bool isFavorite(Song song) => _favoriteSongs.any((s) => s.id == song.id);
 
-  // ── Playlists ──────────────────────────────────────────────────────────────
+  // ── Playlists (persistées) ────────────────────────────────────────────────
   void createPlaylist(String name) {
     _playlists.add({
       'id':    DateTime.now().millisecondsSinceEpoch.toString(),
       'name':  name,
       'songs': <Song>[],
     });
+    _savePlaylists();
     notifyListeners();
+  }
+
+  void deletePlaylist(String playlistId) {
+    _playlists.removeWhere((p) => p['id'] == playlistId);
+    _savePlaylists();
+    notifyListeners();
+  }
+
+  void renamePlaylist(String playlistId, String newName) {
+    final pl = _playlists.firstWhere(
+      (p) => p['id'] == playlistId, orElse: () => {});
+    if (pl.isNotEmpty) {
+      pl['name'] = newName;
+      _savePlaylists();
+      notifyListeners();
+    }
   }
 
   void addSongToPlaylist(String playlistId, Song song) {
     final pl = _playlists.firstWhere(
-      (p) => p['id'] == playlistId,
-      orElse: () => {},
-    );
+      (p) => p['id'] == playlistId, orElse: () => {});
     if (pl.isNotEmpty) {
-      (pl['songs'] as List<Song>).add(song);
+      final songs = pl['songs'] as List<Song>;
+      if (!songs.any((s) => s.id == song.id)) {
+        songs.add(song);
+        _savePlaylists();
+        notifyListeners();
+      }
+    }
+  }
+
+  void removeSongFromPlaylist(String playlistId, String songId) {
+    final pl = _playlists.firstWhere(
+      (p) => p['id'] == playlistId, orElse: () => {});
+    if (pl.isNotEmpty) {
+      (pl['songs'] as List<Song>).removeWhere((s) => s.id == songId);
+      _savePlaylists();
       notifyListeners();
     }
   }
 
   Future<List<Song>> getPlaylistSongs(String playlistId) async {
     final pl = _playlists.firstWhere(
-      (p) => p['id'] == playlistId,
-      orElse: () => {},
-    );
+      (p) => p['id'] == playlistId, orElse: () => {});
     if (pl.isEmpty) return [];
     return List<Song>.from(pl['songs'] as List<Song>);
   }
 
   // ── Téléchargements ────────────────────────────────────────────────────────
-  bool isDownloaded(Song song) =>
-      _downloadedSongs.any((s) => s.id == song.id);
+  bool isDownloaded(Song song) => _downloadedSongs.any((s) => s.id == song.id);
 
   Future<void> downloadSong(Song song, {VoidCallback? onComplete}) async {
     if (isDownloaded(song) || _downloadProgress.containsKey(song.id)) return;
-
     _downloadProgress[song.id] = 0.0;
     notifyListeners();
 
     bool success = false;
     try {
-      // 1. Obtenir l'URL brute depuis le backend
       final resp = await http
           .get(Uri.parse('$_baseUrl/stream/${song.id}'))
           .timeout(const Duration(seconds: 30));
@@ -364,31 +432,24 @@ class MusicProvider with ChangeNotifier {
       if (resp.statusCode == 200) {
         final streamUrl =
             (jsonDecode(resp.body) as Map<String, dynamic>)['url'] as String?;
-
         if (streamUrl != null && streamUrl.isNotEmpty) {
           final dir      = await getApplicationDocumentsDirectory();
           final savePath = '${dir.path}/${song.id}.m4a';
-
           await Dio().download(
-            streamUrl,
-            savePath,
-            onReceiveProgress: (received, total) {
-              if (total > 0) {
-                _downloadProgress[song.id] = received / total;
+            streamUrl, savePath,
+            onReceiveProgress: (rec, tot) {
+              if (tot > 0) {
+                _downloadProgress[song.id] = rec / tot;
                 notifyListeners();
               }
             },
-            options: Options(
-              headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-              },
-            ),
+            options: Options(headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+            }),
           );
-
           _downloadedSongs.add(song);
           await _saveDownloads();
           success = true;
-          debugPrint('[FLUTTER] Téléchargé : ${song.id}');
         }
       }
     } catch (e) {

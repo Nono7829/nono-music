@@ -6,20 +6,34 @@ import '../widgets/full_screen_player.dart';
 import '../widgets/song_options_menu.dart';
 
 class SearchScreen extends StatefulWidget {
-  const SearchScreen({super.key});
+  /// Contrôleur externe optionnel (fourni par MainNavigation pour la nav croisée)
+  final TextEditingController? externalController;
+  const SearchScreen({super.key, this.externalController});
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
 }
 
 class _SearchScreenState extends State<SearchScreen> {
-  final TextEditingController _ctrl = TextEditingController();
+  late final TextEditingController _ctrl;
   final FocusNode _focus = FocusNode();
+  bool _ownController = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.externalController != null) {
+      _ctrl = widget.externalController!;
+    } else {
+      _ctrl = TextEditingController();
+      _ownController = true;
+    }
+  }
 
   @override
   void dispose() {
-    _ctrl.dispose();
     _focus.dispose();
+    if (_ownController) _ctrl.dispose();
     super.dispose();
   }
 
@@ -49,6 +63,8 @@ class _SearchScreenState extends State<SearchScreen> {
               background: Container(color: const Color(0xFF0A0A0A)),
             ),
           ),
+
+          // Barre de recherche
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
@@ -65,8 +81,7 @@ class _SearchScreenState extends State<SearchScreen> {
                   style: const TextStyle(fontSize: 16, color: Colors.white),
                   decoration: InputDecoration(
                     hintText: 'Artistes, titres, albums…',
-                    hintStyle:
-                        const TextStyle(color: Colors.grey, fontSize: 16),
+                    hintStyle: const TextStyle(color: Colors.grey, fontSize: 16),
                     prefixIcon: const Icon(Icons.search_rounded,
                         color: Colors.grey, size: 20),
                     suffixIcon: ValueListenableBuilder(
@@ -83,68 +98,54 @@ class _SearchScreenState extends State<SearchScreen> {
                           : const SizedBox.shrink(),
                     ),
                     border: InputBorder.none,
-                    contentPadding:
-                        const EdgeInsets.symmetric(vertical: 12),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                 ),
               ),
             ),
           ),
 
-          // Loading
+          // États
           if (provider.isLoading)
             const SliverFillRemaining(
-              child: Center(
+              child: Center(child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(color: Color(0xFFFF2D55)),
+                  SizedBox(height: 16),
+                  Text('Recherche en cours…',
+                      style: TextStyle(color: Colors.grey)),
+                ],
+              )),
+            )
+          else if (provider.errorMessage != null)
+            SliverFillRemaining(
+              child: Center(child: Padding(
+                padding: const EdgeInsets.all(32),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    CircularProgressIndicator(color: Color(0xFFFF2D55)),
-                    SizedBox(height: 16),
-                    Text('Recherche en cours…',
-                        style: TextStyle(color: Colors.grey)),
+                    const Icon(Icons.wifi_off_rounded,
+                        color: Colors.white24, size: 48),
+                    const SizedBox(height: 16),
+                    Text(provider.errorMessage!,
+                        style: const TextStyle(color: Colors.grey),
+                        textAlign: TextAlign.center),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Lancez le backend :\ncd demus-backend && node server.js',
+                      style: TextStyle(color: Colors.white38, fontSize: 12),
+                      textAlign: TextAlign.center,
+                    ),
                   ],
                 ),
-              ),
+              )),
             )
-
-          // Erreur
-          else if (provider.errorMessage != null)
-            SliverFillRemaining(
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(32),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.wifi_off_rounded,
-                          color: Colors.white24, size: 48),
-                      const SizedBox(height: 16),
-                      Text(provider.errorMessage!,
-                          style: const TextStyle(color: Colors.grey),
-                          textAlign: TextAlign.center),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Lancez le backend :\ncd demus-backend && node server.js',
-                        style: TextStyle(
-                            color: Colors.white38, fontSize: 12),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            )
-
-          // Aucun résultat
           else if (provider.songs.isEmpty && _ctrl.text.isNotEmpty)
             const SliverFillRemaining(
-              child: Center(
-                child: Text('Aucun résultat.',
-                    style: TextStyle(color: Colors.grey)),
-              ),
+              child: Center(child: Text('Aucun résultat.',
+                  style: TextStyle(color: Colors.grey))),
             )
-
-          // Résultats
           else
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 150),
@@ -166,11 +167,8 @@ class _SearchResultTile extends StatelessWidget {
   const _SearchResultTile({required this.song});
 
   Widget _placeholder() => Container(
-        width: 52,
-        height: 52,
-        color: const Color(0xFF2C2C2E),
-        child: const Icon(Icons.music_note, color: Colors.white30),
-      );
+      width: 52, height: 52, color: const Color(0xFF2C2C2E),
+      child: const Icon(Icons.music_note, color: Colors.white30));
 
   @override
   Widget build(BuildContext context) {
@@ -184,36 +182,26 @@ class _SearchResultTile extends StatelessWidget {
           ClipRRect(
             borderRadius: BorderRadius.circular(6),
             child: song.coverUrl.isNotEmpty
-                ? Image.network(
-                    song.coverUrl,
-                    width: 52,
-                    height: 52,
+                ? Image.network(song.coverUrl, width: 52, height: 52,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => _placeholder(),
-                  )
+                    errorBuilder: (_, __, ___) => _placeholder())
                 : _placeholder(),
           ),
           if (isDownloaded)
-            Positioned(
-              bottom: 0,
-              right: 0,
+            Positioned(bottom: 0, right: 0,
               child: Container(
-                width: 18,
-                height: 18,
+                width: 18, height: 18,
                 decoration: const BoxDecoration(
-                  color: Color(0xFF30D158),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.download_done_rounded, size: 11, color: Colors.black),
+                    color: Color(0xFF30D158), shape: BoxShape.circle),
+                child: const Icon(Icons.download_done_rounded,
+                    size: 11, color: Colors.black),
               ),
             ),
         ],
       ),
       title: Text(song.title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style:
-              const TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
+          maxLines: 1, overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
       subtitle: Text(
         song.durationFormatted.isNotEmpty
             ? '${song.artist} • ${song.durationFormatted}'
