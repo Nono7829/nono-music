@@ -20,104 +20,92 @@ class MusicProvider with ChangeNotifier {
   static const String _baseUrl = 'http://localhost:3000';
 
   // ── Recherche ──────────────────────────────────────────────────────────────
-  List<Song> _songs = [];
-  bool _isLoading = false;
+  List<Song> _songs        = [];
+  bool _isLoading          = false;
   String? _errorMessage;
 
   // ── Lecture ────────────────────────────────────────────────────────────────
-  Song? _currentSong;
-  List<Song> _queue = [];
-  int _currentIndex = -1;
+  Song?      _currentSong;
+  List<Song> _queue        = [];
+  int        _currentIndex = -1;
 
-  /// INTENTION UI : true = on veut jouer.
-  /// Géré UNIQUEMENT par notre code, jamais synced depuis le player stream.
-  bool _isPlaying = false;
-
-  /// true = en train de charger (fetching URL ou setUrl/setFilePath en cours).
-  /// Le bouton pause/play est IGNORÉ pendant cet état.
+  // _loadId : incrémenté à chaque playSong().
+  // Chaque tâche mémorise son propre id ; si elle découvre que _loadId a changé
+  // (un appel plus récent est arrivé), elle abandonne sans toucher à l'état.
+  int  _loadId        = 0;
+  bool _isPlaying     = false;
   bool _isAudioLoading = false;
 
-  /// ─── Clé de sérialisation ─────────────────────────────────────────────────
-  ///
-  /// _loadId   : incrémenté à chaque playSong(). Chaque appel mémorise son
-  ///             propre myId. Un appel "périmé" (myId != _loadId) abandonne
-  ///             silencieusement sa progression SANS réinitialiser les flags.
-  ///
-  /// _isChangingSong : bloque le listener processingStateStream pendant toute
-  ///             la durée d'un changement de chanson (stop → fetch → setUrl).
-  ///             Seul l'appel GAGNANT (myId == _loadId) le remet à false.
-  ///
-  int _loadId = 0;
-  bool _isChangingSong = false;
-
   // ── Téléchargements ────────────────────────────────────────────────────────
-  List<Song> _downloadedSongs = [];
+  List<Song>           _downloadedSongs   = [];
   final Map<String, double> _downloadProgress = {};
 
   // ── Bibliothèque ───────────────────────────────────────────────────────────
-  final List<Song> _favoriteSongs = [];
-  final List<Song> _recentlyPlayed = [];
-  final List<Map<String, dynamic>> _playlists = [];
+  final List<Song>              _favoriteSongs  = [];
+  final List<Song>              _recentlyPlayed = [];
+  final List<Map<String, dynamic>> _playlists  = [];
 
-  final AudioPlayer _audioPlayer = AudioPlayer();
+  final AudioPlayer _player = AudioPlayer();
 
-  // ── Stream position ────────────────────────────────────────────────────────
+  // ── Stream position (pour la barre de progression) ────────────────────────
   Stream<PositionData> get positionDataStream =>
       Rx.combineLatest3<Duration, Duration, Duration?, PositionData>(
-        _audioPlayer.positionStream,
-        _audioPlayer.bufferedPositionStream,
-        _audioPlayer.durationStream,
+        _player.positionStream,
+        _player.bufferedPositionStream,
+        _player.durationStream,
         (pos, buf, dur) => PositionData(pos, buf, dur ?? Duration.zero),
       );
 
-  AudioPlayer get audioPlayer => _audioPlayer;
+  AudioPlayer get audioPlayer => _player;
 
-  // ── Getters publics ────────────────────────────────────────────────────────
-  List<Song> get songs           => _songs;
-  bool get isLoading             => _isLoading;
-  String? get errorMessage       => _errorMessage;
-  Song? get currentSong          => _currentSong;
-  bool get isPlaying             => _isPlaying;
-  bool get isAudioLoading        => _isAudioLoading;
-  List<Song> get favoriteSongs   => _favoriteSongs;
-  List<Song> get recentlyPlayed  => _recentlyPlayed;
-  List<Map<String, dynamic>> get playlists => _playlists;
-  List<Song> get downloadedSongs => _downloadedSongs;
+  // ── Getters ────────────────────────────────────────────────────────────────
+  List<Song>  get songs          => _songs;
+  bool        get isLoading      => _isLoading;
+  String?     get errorMessage   => _errorMessage;
+  Song?       get currentSong    => _currentSong;
+  bool        get isPlaying      => _isPlaying;
+  bool        get isAudioLoading => _isAudioLoading;
+  List<Song>  get favoriteSongs  => _favoriteSongs;
+  List<Song>  get recentlyPlayed => _recentlyPlayed;
+  List<Song>  get downloadedSongs => _downloadedSongs;
   Map<String, double> get downloadProgress => _downloadProgress;
+  List<Map<String, dynamic>> get playlists => _playlists;
 
   // ── Constructeur ───────────────────────────────────────────────────────────
   MusicProvider() {
     _initDownloads();
 
-    _audioPlayer.processingStateStream.listen((state) {
-      // RÈGLE CRITIQUE : Si _isChangingSong est true, on est en pleine
-      // transition (stop → setUrl). On ignore TOUT évènement du player,
-      // y compris "completed" qui serait émis par le stop() précédent.
-      if (_isChangingSong) return;
-
+    // Écoute la fin de piste — logique simplifiée, pas de flag bloquant.
+    _player.processingStateStream.listen((state) {
       if (state == ProcessingState.completed) {
         _isPlaying = false;
-        _isAudioLoading = false;
         notifyListeners();
-        // Petit délai pour laisser le player se stabiliser avant la transition
-        Future.delayed(const Duration(milliseconds: 300), playNext);
+        Future.delayed(const Duration(milliseconds: 200), playNext);
+      }
+    });
+
+    // Synchronise _isPlaying avec l'état réel du player (pause externe, etc.)
+    _player.playingStream.listen((playing) {
+      if (!_isAudioLoading && _isPlaying != playing) {
+        _isPlaying = playing;
+        notifyListeners();
       }
     });
   }
 
-  // ── Persistance ────────────────────────────────────────────────────────────
+  // ── Persistance des téléchargements ───────────────────────────────────────
   Future<void> _initDownloads() async {
     final prefs = await SharedPreferences.getInstance();
-    final String? json = prefs.getString('downloaded_songs');
-    if (json == null) return;
+    final raw = prefs.getString('downloaded_songs');
+    if (raw == null) return;
     try {
-      final decoded = jsonDecode(json) as List;
-      _downloadedSongs = decoded.map((j) => Song(
-        id: j['id'] as String,
-        title: j['title'] as String,
-        artist: j['artist'] as String,
+      final list = jsonDecode(raw) as List;
+      _downloadedSongs = list.map((j) => Song(
+        id:       j['id']       as String,
+        title:    j['title']    as String,
+        artist:   j['artist']   as String,
         duration: (j['duration'] as num).toInt(),
-        coverUrl: j['coverUrl'] as String? ?? '',
+        coverUrl: (j['coverUrl'] as String?) ?? '',
       )).toList();
       notifyListeners();
     } catch (_) {}
@@ -136,76 +124,65 @@ class MusicProvider with ChangeNotifier {
   // ── Recherche ──────────────────────────────────────────────────────────────
   Future<void> searchYouTube(String query) async {
     if (query.trim().isEmpty) return;
-    _isLoading = true;
-    _errorMessage = null;
-    _songs = [];
+    _isLoading     = true;
+    _errorMessage  = null;
+    _songs         = [];
     notifyListeners();
+
     try {
-      final uri = Uri.parse('$_baseUrl/search').replace(queryParameters: {'q': query.trim()});
-      final response = await http.get(uri).timeout(const Duration(seconds: 30));
-      if (response.statusCode != 200) {
-        _errorMessage = 'Erreur serveur (${response.statusCode})';
+      final uri = Uri.parse('$_baseUrl/search')
+          .replace(queryParameters: {'q': query.trim()});
+      final resp = await http.get(uri).timeout(const Duration(seconds: 30));
+
+      if (resp.statusCode != 200) {
+        _errorMessage = 'Erreur serveur (${resp.statusCode})';
       } else {
-        final decoded = jsonDecode(response.body);
-        if (decoded is Map<String, dynamic>) {
-          final rawList = decoded['results'];
-          if (rawList is List) {
-            for (final item in rawList) {
-              if (item is Map<String, dynamic>) {
-                try { _songs.add(Song.fromJson(item)); } catch (_) {}
-              }
+        final body = jsonDecode(resp.body);
+        if (body is Map<String, dynamic> && body['results'] is List) {
+          for (final item in body['results'] as List) {
+            if (item is Map<String, dynamic>) {
+              try { _songs.add(Song.fromJson(item)); } catch (_) {}
             }
           }
         }
-        debugPrint('[FLUTTER] ${_songs.length} chansons affichées');
+        debugPrint('[FLUTTER] ${_songs.length} résultats');
       }
     } on http.ClientException {
-      _errorMessage = 'Serveur inaccessible. Lancez : node server.js';
+      _errorMessage = 'Serveur inaccessible.\nLancez : cd demus-backend && node server.js';
     } catch (e) {
       _errorMessage = 'Erreur : $e';
     }
+
     _isLoading = false;
     notifyListeners();
   }
 
   void clearSearch() {
-    _songs = [];
+    _songs        = [];
     _errorMessage = null;
     notifyListeners();
   }
 
-  // ── LECTURE PRINCIPALE ─────────────────────────────────────────────────────
+  // ── LECTURE ────────────────────────────────────────────────────────────────
   //
-  // LOGIQUE :
-  //   1. myId = ++_loadId  →  invalide tous les chargements précédents
-  //   2. _isChangingSong = true  →  bloque le listener pendant la transition
-  //   3. Mise à jour UI immédiate (_currentSong, _isPlaying, _isAudioLoading)
-  //   4. stop() → résolution source → setUrl/setFilePath → play()
-  //   5. Après chaque await : si myId != _loadId → return SANS toucher aux flags
-  //      (un appel plus récent gère maintenant le player)
-  //   6. SEUL l'appel gagnant (myId == _loadId) remet _isChangingSong à false
+  // Logique simplifiée :
+  //  • myId = ++_loadId  invalide tous les chargements antérieurs.
+  //  • Après chaque await, on vérifie `myId != _loadId` → abandon silencieux.
+  //  • Plus de _isChangingSong : le listener processingStateStream peut
+  //    toujours s'exécuter ; s'il déclenche playNext() pendant un chargement
+  //    en cours, playNext incrémente _loadId et annule le précédent.
   //
   Future<void> playSong(Song song, {List<Song>? queue}) async {
     final myId = ++_loadId;
-    _isChangingSong = true; // Bloquer le listener
 
-    // ── Mise à jour de la queue ──────────────────────────────────────────
+    // ── Mise à jour de la file ───────────────────────────────────────────
     _currentSong = song;
-    if (queue != null && queue.isNotEmpty) {
-      _queue = List.from(queue);
-      _currentIndex = _queue.indexWhere((s) => s.id == song.id);
-      if (_currentIndex == -1) _currentIndex = 0;
-    } else if (_songs.isNotEmpty) {
-      _queue = List.from(_songs);
-      _currentIndex = _queue.indexWhere((s) => s.id == song.id);
-      if (_currentIndex == -1) { _queue = [song]; _currentIndex = 0; }
-    } else {
-      _queue = [song];
-      _currentIndex = 0;
-    }
+    final sourceQueue = queue ?? ((_songs.isNotEmpty) ? _songs : [song]);
+    _queue = List.from(sourceQueue);
+    _currentIndex = _queue.indexWhere((s) => s.id == song.id);
+    if (_currentIndex == -1) { _queue = [song]; _currentIndex = 0; }
 
-    // ── UI : intention de jouer, chargement ─────────────────────────────
-    _isPlaying = true;
+    _isPlaying      = true;
     _isAudioLoading = true;
     _recentlyPlayed.removeWhere((s) => s.id == song.id);
     _recentlyPlayed.insert(0, song);
@@ -213,113 +190,93 @@ class MusicProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      // Étape 1 : Stopper proprement le player en cours
-      await _audioPlayer.stop();
-      // Si un appel plus récent est arrivé pendant le stop() : on abandonne
-      // SANS toucher à _isChangingSong (le nouveau appel le gère lui-même)
+      // 1. Arrêter l'audio en cours
+      await _player.stop();
       if (myId != _loadId) return;
 
-      // Étape 2 : Résoudre la source audio
-      String? source;
-      try {
-        final dir = await getApplicationDocumentsDirectory();
-        final local = File('${dir.path}/${song.id}.m4a');
-        if (await local.exists()) {
-          debugPrint('[FLUTTER] Lecture hors-ligne : ${song.id}');
-          source = local.path;
-        } else {
-          if (myId != _loadId) return;
-          debugPrint('[FLUTTER] Lecture proxy : $_baseUrl/proxy/${song.id}');
-          source = '$_baseUrl/proxy/${song.id}';
-        }
-      } catch (e) {
-        debugPrint('[FLUTTER] Résolution source erreur : $e');
-      }
-
+      // 2. Déterminer la source (local ou proxy)
+      final String audioSource = await _resolveSource(song);
       if (myId != _loadId) return;
 
-      if (source == null) {
-        // Échec résolution : on est le gagnant, on reset tout
-        _isChangingSong = false;
-        _isPlaying = false;
-        _isAudioLoading = false;
-        notifyListeners();
-        return;
-      }
-
-      // Étape 3 : Charger dans le player avec fallback automatique
-      if (source.startsWith('http')) {
-        await _audioPlayer.setUrl(source);
+      // 3. Charger la source dans le player
+      if (audioSource.startsWith('http')) {
+        await _player.setUrl(audioSource);
       } else {
-        // Fichier local : vérifier qu'il n'est pas corrompu (< 50KB = incomplet)
-        final localFile = File(source);
-        final fileSize = await localFile.length();
-        if (fileSize < 50000) {
-          debugPrint('[FLUTTER] Fichier local corrompu ($fileSize bytes), suppression et fallback proxy');
-          await localFile.delete();
-          // Retirer de la liste des téléchargements
-          _downloadedSongs.removeWhere((s) => s.id == song.id);
-          _saveDownloads();
+        try {
+          await _player.setFilePath(audioSource);
+        } catch (e) {
+          debugPrint('[FLUTTER] setFilePath failed, fallback proxy: $e');
           if (myId != _loadId) return;
-          // Fallback vers le proxy
-          await _audioPlayer.setUrl('$_baseUrl/proxy/${song.id}');
-        } else {
-          try {
-            await _audioPlayer.setFilePath(source);
-          } catch (e) {
-            // setFilePath a échoué (threading Windows ou format) → fallback proxy
-            debugPrint('[FLUTTER] setFilePath échoué, fallback proxy : $e');
-            if (myId != _loadId) return;
-            await _audioPlayer.setUrl('$_baseUrl/proxy/${song.id}');
-          }
+          await _player.setUrl('$_baseUrl/proxy/${song.id}');
         }
       }
       if (myId != _loadId) return;
 
-      // Étape 4 : Lancer la lecture — on est le gagnant, libérer les flags
-      _isChangingSong = false; // ← Seul l'appel gagnant remet ce flag à false
+      // 4. Lancer
       _isAudioLoading = false;
       notifyListeners();
-      await _audioPlayer.play();
+      await _player.play();
 
     } catch (e) {
-      // "Loading interrupted" = causé par un stop() plus récent. Normal.
-      // On ne remet les flags à false QUE si on est encore le gagnant.
+      debugPrint('[FLUTTER] playSong error: $e');
       if (myId == _loadId) {
-        _isChangingSong = false;
-        _isPlaying = false;
+        _isPlaying      = false;
         _isAudioLoading = false;
         notifyListeners();
       }
-      debugPrint('[FLUTTER] playSong error: $e');
     }
+  }
+
+  /// Retourne le chemin local s'il existe, sinon l'URL du proxy.
+  Future<String> _resolveSource(Song song) async {
+    try {
+      final dir   = await getApplicationDocumentsDirectory();
+      final local = File('${dir.path}/${song.id}.m4a');
+      if (await local.exists()) {
+        final size = await local.length();
+        if (size > 50000) {
+          debugPrint('[FLUTTER] source locale : ${song.id} ($size bytes)');
+          return local.path;
+        }
+        // Fichier incomplet → supprimer et retomber sur le proxy
+        await local.delete();
+        _downloadedSongs.removeWhere((s) => s.id == song.id);
+        _saveDownloads();
+      }
+    } catch (_) {}
+    debugPrint('[FLUTTER] source proxy : $_baseUrl/proxy/${song.id}');
+    return '$_baseUrl/proxy/${song.id}';
   }
 
   // ── Contrôles ──────────────────────────────────────────────────────────────
 
   void togglePlayPause() {
-    if (_isAudioLoading) return; // En chargement → ignorer
+    if (_isAudioLoading) return;
 
     if (_isPlaying) {
-      _audioPlayer.pause();
+      _player.pause();
       _isPlaying = false;
-      notifyListeners();
     } else {
-      final ps = _audioPlayer.processingState;
+      final ps = _player.processingState;
       if (ps == ProcessingState.ready || ps == ProcessingState.buffering) {
-        _audioPlayer.play();
+        _player.play();
         _isPlaying = true;
-        notifyListeners();
+      } else if (ps == ProcessingState.completed) {
+        // Rembobiner et relire
+        _player.seek(Duration.zero);
+        _player.play();
+        _isPlaying = true;
       }
     }
+    notifyListeners();
   }
 
   void playNext() {
-    if (_queue.isEmpty || _currentIndex < 0) return;
-    if (_currentIndex < _queue.length - 1) {
+    if (_queue.isEmpty) return;
+    if (_currentIndex >= 0 && _currentIndex < _queue.length - 1) {
       playSong(_queue[_currentIndex + 1], queue: _queue);
     } else {
-      _isPlaying = false;
+      _isPlaying      = false;
       _isAudioLoading = false;
       notifyListeners();
     }
@@ -327,20 +284,21 @@ class MusicProvider with ChangeNotifier {
 
   void playPrevious() {
     if (_currentSong == null) return;
-    if (_audioPlayer.position.inSeconds > 3) {
-      _audioPlayer.seek(Duration.zero);
-      return;
+    // < 3s écoulées → chanson précédente ; sinon → rembobiner
+    if (_player.position.inSeconds < 3 &&
+        _currentIndex > 0 &&
+        _queue.isNotEmpty) {
+      playSong(_queue[_currentIndex - 1], queue: _queue);
+    } else {
+      _player.seek(Duration.zero);
     }
-    if (_queue.isEmpty || _currentIndex <= 0) {
-      _audioPlayer.seek(Duration.zero);
-      return;
-    }
-    playSong(_queue[_currentIndex - 1], queue: _queue);
   }
 
   void addToQueue(Song song) {
-    if (!_queue.any((s) => s.id == song.id)) _queue.add(song);
-    notifyListeners();
+    if (!_queue.any((s) => s.id == song.id)) {
+      _queue.add(song);
+      notifyListeners();
+    }
   }
 
   // ── Favoris ────────────────────────────────────────────────────────────────
@@ -353,20 +311,24 @@ class MusicProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  bool isFavorite(Song song) => _favoriteSongs.any((s) => s.id == song.id);
+  bool isFavorite(Song song) =>
+      _favoriteSongs.any((s) => s.id == song.id);
 
   // ── Playlists ──────────────────────────────────────────────────────────────
   void createPlaylist(String name) {
     _playlists.add({
-      'id': DateTime.now().millisecondsSinceEpoch.toString(),
-      'name': name,
+      'id':    DateTime.now().millisecondsSinceEpoch.toString(),
+      'name':  name,
       'songs': <Song>[],
     });
     notifyListeners();
   }
 
   void addSongToPlaylist(String playlistId, Song song) {
-    final pl = _playlists.firstWhere((p) => p['id'] == playlistId, orElse: () => {});
+    final pl = _playlists.firstWhere(
+      (p) => p['id'] == playlistId,
+      orElse: () => {},
+    );
     if (pl.isNotEmpty) {
       (pl['songs'] as List<Song>).add(song);
       notifyListeners();
@@ -374,48 +336,84 @@ class MusicProvider with ChangeNotifier {
   }
 
   Future<List<Song>> getPlaylistSongs(String playlistId) async {
-    final pl = _playlists.firstWhere((p) => p['id'] == playlistId, orElse: () => {});
+    final pl = _playlists.firstWhere(
+      (p) => p['id'] == playlistId,
+      orElse: () => {},
+    );
     if (pl.isEmpty) return [];
     return List<Song>.from(pl['songs'] as List<Song>);
   }
 
   // ── Téléchargements ────────────────────────────────────────────────────────
-  bool isDownloaded(Song song) => _downloadedSongs.any((s) => s.id == song.id);
+  bool isDownloaded(Song song) =>
+      _downloadedSongs.any((s) => s.id == song.id);
 
   Future<void> downloadSong(Song song, {VoidCallback? onComplete}) async {
-    if (isDownloaded(song)) return;
+    if (isDownloaded(song) || _downloadProgress.containsKey(song.id)) return;
+
     _downloadProgress[song.id] = 0.0;
     notifyListeners();
+
     bool success = false;
     try {
-      final res = await http.get(Uri.parse('$_baseUrl/stream/${song.id}'));
-      if (res.statusCode == 200) {
-        final streamUrl = (jsonDecode(res.body) as Map)['url'] as String?;
-        if (streamUrl != null) {
-          final dir = await getApplicationDocumentsDirectory();
+      // 1. Obtenir l'URL brute depuis le backend
+      final resp = await http
+          .get(Uri.parse('$_baseUrl/stream/${song.id}'))
+          .timeout(const Duration(seconds: 30));
+
+      if (resp.statusCode == 200) {
+        final streamUrl =
+            (jsonDecode(resp.body) as Map<String, dynamic>)['url'] as String?;
+
+        if (streamUrl != null && streamUrl.isNotEmpty) {
+          final dir      = await getApplicationDocumentsDirectory();
           final savePath = '${dir.path}/${song.id}.m4a';
-          await Dio().download(streamUrl, savePath, onReceiveProgress: (rec, tot) {
-            if (tot != -1) { _downloadProgress[song.id] = rec / tot; notifyListeners(); }
-          });
+
+          await Dio().download(
+            streamUrl,
+            savePath,
+            onReceiveProgress: (received, total) {
+              if (total > 0) {
+                _downloadProgress[song.id] = received / total;
+                notifyListeners();
+              }
+            },
+            options: Options(
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+              },
+            ),
+          );
+
           _downloadedSongs.add(song);
           await _saveDownloads();
           success = true;
+          debugPrint('[FLUTTER] Téléchargé : ${song.id}');
         }
       }
     } catch (e) {
       debugPrint('[FLUTTER] Download error: $e');
     }
+
     _downloadProgress.remove(song.id);
     notifyListeners();
-    if (success && onComplete != null) onComplete();
+    if (success) onComplete?.call();
   }
 
   Future<void> removeDownload(Song song) async {
-    final dir = await getApplicationDocumentsDirectory();
-    final file = File('${dir.path}/${song.id}.m4a');
-    if (await file.exists()) await file.delete();
+    try {
+      final dir  = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/${song.id}.m4a');
+      if (await file.exists()) await file.delete();
+    } catch (_) {}
     _downloadedSongs.removeWhere((s) => s.id == song.id);
     await _saveDownloads();
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _player.dispose();
+    super.dispose();
   }
 }

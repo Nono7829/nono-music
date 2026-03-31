@@ -1,171 +1,166 @@
 const express = require('express');
-const cors = require('cors');
-const { exec, spawn } = require('child_process');
-const https = require('https');
-const http = require('http');
-const path = require('path');
+const cors    = require('cors');
+const { exec } = require('child_process');
+const https   = require('https');
+const http    = require('http');
+const path    = require('path');
 
-const app = express();
+const app  = express();
 const PORT = 3000;
 
 app.use(cors());
 app.use(express.json());
 
-// Chemin vers yt-dlp bundlé
-const YT_DLP = path.join(__dirname, 'node_modules', 'youtube-dl-exec', 'bin', 'yt-dlp');
+const YT_DLP = path.join(
+  __dirname, 'node_modules', 'youtube-dl-exec', 'bin', 'yt-dlp'
+);
 
-// ─────────────────────────────────────────────────────────────────────────────
-// GET /search?q=PLK
-// Retourne une liste de vidéos YouTube (NDJSON line-by-line depuis yt-dlp)
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Cache des URLs de stream ────────────────────────────────────────────────
+// Les URLs signées YouTube sont valides ~6h. On les garde 4h pour être safe.
+const STREAM_CACHE     = new Map(); // videoId → { url, expiresAt }
+const CACHE_TTL_MS     = 4 * 60 * 60 * 1000; // 4 heures
+// Requêtes en cours (dedup : si deux requêtes arrivent en même temps pour le
+// même videoId, on attend la même Promise au lieu de lancer deux yt-dlp)
+const PENDING_FETCHES  = new Map(); // videoId → Promise<string>
+
+// ─── GET /search?q=... ───────────────────────────────────────────────────────
 app.get('/search', (req, res) => {
-  const query = req.query.q;
-  if (!query || !query.trim()) {
-    return res.status(400).json({ error: 'Paramètre q manquant' });
-  }
-  console.log(`[SEARCH] Requête : "${query}"`);
+  const query = (req.query.q || '').trim();
+  if (!query) return res.status(400).json({ error: 'Paramètre q manquant' });
 
-  const command = [
+  console.log(`[SEARCH] "${query}"`);
+
+  const safeQuery = query.replace(/"/g, '\\"');
+  const cmd = [
     `"${YT_DLP}"`,
-    `"ytsearch40:${query.replace(/"/g, '\\"')}"`,
+    `"ytsearch40:${safeQuery}"`,
     '--dump-json',
-    '--no-playlist',
     '--flat-playlist',
     '--no-warnings',
     '--ignore-errors',
-    '--extractor-args "youtube:skip=dash,hls"',
   ].join(' ');
 
-  exec(command, { maxBuffer: 1024 * 1024 * 20 }, (error, stdout, stderr) => {
+  exec(cmd, { maxBuffer: 1024 * 1024 * 20, timeout: 30000 }, (err, stdout, stderr) => {
     if (stderr) console.warn('[SEARCH] stderr:', stderr.substring(0, 200));
-    if (error && !stdout) {
-      console.error('[SEARCH] Erreur:', error.message);
-      return res.status(500).json({ error: 'Erreur yt-dlp', details: error.message });
+    if (err && !stdout) {
+      console.error('[SEARCH] exec error:', err.message);
+      return res.status(500).json({ error: 'yt-dlp failed', details: err.message });
     }
-
-    const lines = stdout.split('\n').filter(l => l.trim());
-    console.log(`[SEARCH] ${lines.length} lignes reçues`);
 
     const results = [];
-    for (const line of lines) {
+    for (const line of stdout.split('\n').filter(Boolean)) {
       try {
         const item = JSON.parse(line);
-        const id = item.id ?? item.url ?? null;
-        // Uniquement les vraies vidéos YouTube (11 caractères, pas de chaîne UCL...)
-        if (!id || id.length !== 11) continue;
-        // Filtrer les lives (durée nulle ou très longue)
-        const duration = item.duration ?? 0;
-        if (duration > 1800) continue; // max 30min = chanson, pas un concert
-
+        const id = item.id ?? null;
+        if (!id || id.length !== 11) continue;           // pas une vidéo YT
+        const dur = item.duration ?? 0;
+        if (dur > 1800) continue;                        // > 30 min → concert/live
         results.push({
           id,
-          title: item.title ?? item.fulltitle ?? 'Titre inconnu',
-          artist: item.uploader ?? item.channel ?? item.artist ?? 'Artiste inconnu',
-          duration,
-          thumbnail: _bestThumbnail(item),
+          title:     item.title     ?? 'Titre inconnu',
+          artist:    item.uploader  ?? item.channel ?? 'Artiste inconnu',
+          duration:  dur,
+          thumbnail: bestThumb(item),
         });
-      } catch (e) {
-        // ligne JSON invalide, on ignore
-      }
+      } catch (_) {}
     }
 
-    console.log(`[SEARCH] ${results.length} résultats valides`);
+    console.log(`[SEARCH] → ${results.length} résultats`);
     return res.json({ results });
   });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// GET /proxy/:videoId
-//
-// ARCHITECTURE PROXY :
-//   Flutter → just_audio.setUrl('http://localhost:3000/proxy/ID')
-//                   ↓
-//   Node.js → yt-dlp obtient l'URL signée YouTube
-//                   ↓
-//   Node.js → proxifie l'audio vers Flutter avec support Range (seeking)
-//
-// Pourquoi proxy ? Les URL signées YouTube ont des headers spécifiques liés
-// à l'IP de yt-dlp. Si Flutter essaie d'y accéder directement, YouTube refuse.
-// En passant par localhost, c'est toujours Node.js qui accède à YouTube.
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── GET /proxy/:videoId ─────────────────────────────────────────────────────
+// just_audio pointe ici. Node proxifie l'audio avec support Range (seeking).
 app.get('/proxy/:videoId', async (req, res) => {
   const { videoId } = req.params;
-  console.log(`[PROXY] Demande pour : ${videoId}`);
+  console.log(`[PROXY] ${videoId}`);
 
-  // Étape 1 : obtenir l'URL de stream depuis yt-dlp
   let streamUrl;
   try {
     streamUrl = await getStreamUrl(videoId);
   } catch (err) {
-    console.error('[PROXY] Erreur yt-dlp:', err.message);
-    return res.status(500).json({ error: 'Impossible de récupérer le stream', details: err.message });
+    console.error('[PROXY] getStreamUrl error:', err.message);
+    return res.status(500).json({ error: 'Cannot get stream', details: err.message });
   }
 
-  console.log(`[PROXY] URL obtenue, proxification en cours…`);
-
-  // Étape 2 : proxifier avec support Range (pour le seeking dans just_audio)
-  const rangHeader = req.headers['range'];
-  const requestHeaders = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-    'Accept': '*/*',
-    'Accept-Encoding': 'identity', // forcer non-compressé pour le streaming
-    ...(rangHeader ? { 'Range': rangHeader } : {}),
+  const rangeHeader = req.headers['range'];
+  const reqHeaders  = {
+    'User-Agent':      'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+    'Accept':          '*/*',
+    'Accept-Encoding': 'identity',
+    ...(rangeHeader ? { Range: rangeHeader } : {}),
   };
 
-  const urlObj = new URL(streamUrl);
-  const isHttps = urlObj.protocol === 'https:';
-  const transport = isHttps ? https : http;
+  const transport = streamUrl.startsWith('https') ? https : http;
 
-  const proxyReq = transport.get(streamUrl, { headers: requestHeaders }, (proxyRes) => {
-    const statusCode = proxyRes.statusCode || 200;
-    
-    // Transmettre les headers importants
-    const responseHeaders = {
-      'Content-Type': proxyRes.headers['content-type'] || 'audio/mp4',
+  const proxyReq = transport.get(streamUrl, { headers: reqHeaders }, (proxyRes) => {
+    const status = proxyRes.statusCode ?? 200;
+
+    // Si YouTube retourne 403/410, vider le cache et signaler l'erreur
+    if (status === 403 || status === 410) {
+      STREAM_CACHE.delete(videoId);
+      console.warn(`[PROXY] ${status} from YouTube, cache invalidé`);
+      if (!res.headersSent) {
+        res.status(status).json({ error: `YouTube returned ${status}` });
+      }
+      return;
+    }
+
+    const resHeaders = {
+      'Content-Type':  proxyRes.headers['content-type'] || 'audio/mp4',
       'Accept-Ranges': 'bytes',
     };
     if (proxyRes.headers['content-length']) {
-      responseHeaders['Content-Length'] = proxyRes.headers['content-length'];
+      resHeaders['Content-Length'] = proxyRes.headers['content-length'];
     }
     if (proxyRes.headers['content-range']) {
-      responseHeaders['Content-Range'] = proxyRes.headers['content-range'];
+      resHeaders['Content-Range'] = proxyRes.headers['content-range'];
     }
 
-    res.writeHead(statusCode, responseHeaders);
+    res.writeHead(status, resHeaders);
     proxyRes.pipe(res);
-    
-    req.on('close', () => proxyReq.destroy()); // Nettoyer si le client déconnecte
+    req.on('close', () => { try { proxyReq.destroy(); } catch (_) {} });
   });
 
   proxyReq.on('error', (err) => {
-    console.error('[PROXY] Erreur de connexion YouTube:', err.message);
-    if (!res.headersSent) {
-      res.status(502).json({ error: 'Erreur de proxy', details: err.message });
-    }
+    console.error('[PROXY] pipe error:', err.message);
+    if (!res.headersSent) res.status(502).json({ error: 'Proxy error', details: err.message });
   });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// GET /stream/:videoId  (rétro-compat : retourne l'URL brute)
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── GET /stream/:videoId ────────────────────────────────────────────────────
+// Retourne l'URL brute (pour le téléchargement via Dio).
 app.get('/stream/:videoId', async (req, res) => {
   const { videoId } = req.params;
-  console.log(`[STREAM] Demande URL pour : ${videoId}`);
+  console.log(`[STREAM] ${videoId}`);
   try {
     const url = await getStreamUrl(videoId);
     return res.json({ url });
   } catch (err) {
-    console.error('[STREAM] Erreur:', err.message);
-    return res.status(500).json({ error: 'Impossible de récupérer le stream', details: err.message });
+    return res.status(500).json({ error: 'Cannot get stream', details: err.message });
   }
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Utilitaire : obtenir l'URL de stream via yt-dlp (Promise)
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Utilitaire : URL de stream avec CACHE ───────────────────────────────────
 function getStreamUrl(videoId) {
-  return new Promise((resolve, reject) => {
-    const command = [
+  // 1. Cache valide → retour immédiat (0 ms de latence)
+  const cached = STREAM_CACHE.get(videoId);
+  if (cached && Date.now() < cached.expiresAt) {
+    console.log(`[CACHE] hit → ${videoId}`);
+    return Promise.resolve(cached.url);
+  }
+
+  // 2. Requête déjà en cours → on attend la même Promise
+  if (PENDING_FETCHES.has(videoId)) {
+    console.log(`[CACHE] pending → ${videoId}`);
+    return PENDING_FETCHES.get(videoId);
+  }
+
+  // 3. Nouveau fetch
+  console.log(`[CACHE] miss → fetch yt-dlp pour ${videoId}`);
+  const promise = new Promise((resolve, reject) => {
+    const cmd = [
       `"${YT_DLP}"`,
       `"https://www.youtube.com/watch?v=${videoId}"`,
       '--get-url',
@@ -174,30 +169,38 @@ function getStreamUrl(videoId) {
       '--extractor-args "youtube:player-client=web,mweb,default"',
     ].join(' ');
 
-    exec(command, { timeout: 20000 }, (error, stdout, stderr) => {
-      if (error || !stdout.trim()) {
-        return reject(new Error(stderr || error?.message || 'Aucune URL obtenue'));
+    exec(cmd, { timeout: 25000 }, (err, stdout, stderr) => {
+      PENDING_FETCHES.delete(videoId);
+
+      if (err || !stdout.trim()) {
+        return reject(new Error(stderr || err?.message || 'No URL from yt-dlp'));
       }
-      resolve(stdout.trim().split('\n')[0]);
+
+      const url = stdout.trim().split('\n')[0];
+      STREAM_CACHE.set(videoId, { url, expiresAt: Date.now() + CACHE_TTL_MS });
+      console.log(`[CACHE] stored → ${videoId}`);
+      resolve(url);
     });
   });
+
+  PENDING_FETCHES.set(videoId, promise);
+  return promise;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Utilitaire : meilleure miniature disponible
-// ─────────────────────────────────────────────────────────────────────────────
-function _bestThumbnail(item) {
-  if (Array.isArray(item.thumbnails) && item.thumbnails.length > 0) {
+// ─── Utilitaire : meilleure miniature ───────────────────────────────────────
+function bestThumb(item) {
+  if (Array.isArray(item.thumbnails) && item.thumbnails.length) {
     const sorted = item.thumbnails
-      .filter(t => t && t.url)
+      .filter(t => t?.url)
       .sort((a, b) => (b.width ?? 0) - (a.width ?? 0));
-    if (sorted.length > 0) return sorted[0].url;
+    if (sorted.length) return sorted[0].url;
   }
-  if (item.thumbnail && typeof item.thumbnail === 'string') return item.thumbnail;
-  if (item.id) return `https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`;
+  if (item.thumbnail) return item.thumbnail;
+  if (item.id)        return `https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`;
   return '';
 }
 
 app.listen(PORT, () => {
-  console.log(`✅ Nono Music backend démarré sur http://localhost:${PORT}`);
+  console.log(`✅ Nono Music backend → http://localhost:${PORT}`);
+  console.log(`   Cache TTL : 4h | URLs de stream mises en cache après 1ère lecture`);
 });

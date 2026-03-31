@@ -10,18 +10,16 @@ class MiniPlayer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<MusicProvider>();
-    final song = provider.currentSong;
+    final song     = provider.currentSong;
     if (song == null) return const SizedBox.shrink();
 
     return GestureDetector(
-      onTap: () {
-        showModalBottomSheet(
-          context: context,
-          isScrollControlled: true,
-          backgroundColor: Colors.transparent,
-          builder: (_) => const FullScreenPlayer(),
-        );
-      },
+      onTap: () => showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => const FullScreenPlayer(),
+      ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10),
         child: Container(
@@ -34,7 +32,7 @@ class MiniPlayer extends StatelessWidget {
                 color: Colors.black.withValues(alpha: 0.5),
                 blurRadius: 20,
                 offset: const Offset(0, 4),
-              )
+              ),
             ],
           ),
           child: Row(
@@ -43,18 +41,11 @@ class MiniPlayer extends StatelessWidget {
               // Pochette
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
-                child: Image.network(
-                  song.coverUrl,
-                  width: 46,
-                  height: 46,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
-                    width: 46,
-                    height: 46,
-                    color: const Color(0xFF1C1C1E),
-                    child: const Icon(Icons.music_note, color: Colors.white30),
-                  ),
-                ),
+                child: song.coverUrl.isNotEmpty
+                    ? Image.network(song.coverUrl,
+                        width: 46, height: 46, fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => _thumb())
+                    : _thumb(),
               ),
               const SizedBox(width: 12),
               // Titre + artiste
@@ -63,53 +54,39 @@ class MiniPlayer extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      song.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w600, fontSize: 13),
-                    ),
-                    Text(
-                      song.artist,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Colors.grey, fontSize: 12),
-                    ),
+                    Text(song.title,
+                      maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    Text(song.artist,
+                      maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Colors.grey, fontSize: 12)),
                   ],
                 ),
               ),
               // Play / Pause / Loading
               SizedBox(
-                width: 40,
-                height: 40,
+                width: 40, height: 40,
                 child: provider.isAudioLoading
                     ? const Padding(
-                        padding: EdgeInsets.all(8),
+                        padding: EdgeInsets.all(10),
                         child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Color(0xFFFF2D55),
-                        ),
-                      )
+                            strokeWidth: 2, color: Color(0xFFFF2D55)))
                     : IconButton(
                         icon: Icon(
                           provider.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                          color: Colors.white,
-                          size: 28,
-                        ),
+                          color: Colors.white, size: 28),
                         onPressed: provider.togglePlayPause,
                         padding: EdgeInsets.zero,
                       ),
               ),
               // Suivant
               IconButton(
-                icon: const Icon(Icons.skip_next_rounded,
-                    color: Colors.white, size: 26),
+                icon: const Icon(Icons.skip_next_rounded, color: Colors.white, size: 26),
                 onPressed: provider.isAudioLoading ? null : provider.playNext,
               ),
+              // Options
               IconButton(
-                icon: const Icon(Icons.more_vert_rounded,
-                    color: Colors.white70, size: 24),
+                icon: const Icon(Icons.more_vert_rounded, color: Colors.white60, size: 22),
                 onPressed: () => showSongOptionsMenu(context, song),
               ),
               const SizedBox(width: 4),
@@ -119,4 +96,8 @@ class MiniPlayer extends StatelessWidget {
       ),
     );
   }
+
+  Widget _thumb() => Container(
+      width: 46, height: 46, color: const Color(0xFF1C1C1E),
+      child: const Icon(Icons.music_note, color: Colors.white30));
 }
