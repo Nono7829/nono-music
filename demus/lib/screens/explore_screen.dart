@@ -90,7 +90,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                 const SizedBox(height: 28),
 
                 // ── Charts ───────────────────────────────────────────────
-                _SectionHeader(
+                const _SectionHeader(
                   title: 'Classements',
                   subtitle: 'Les titres qui cartonnent',
                 ),
@@ -109,7 +109,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                 const SizedBox(height: 28),
 
                 // ── Humeurs / Moments ─────────────────────────────────────
-                _SectionHeader(
+                const _SectionHeader(
                   title: 'Humeurs & moments',
                   subtitle: 'Une playlist pour chaque instant',
                 ),
@@ -162,7 +162,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                 const SizedBox(height: 28),
 
                 // ── Genres ───────────────────────────────────────────────
-                _SectionHeader(
+                const _SectionHeader(
                   title: 'Genres',
                   subtitle: 'Plongez dans un style musical',
                 ),
@@ -185,7 +185,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                 const SizedBox(height: 28),
 
                 // ── Artistes populaires ───────────────────────────────────
-                _SectionHeader(
+                const _SectionHeader(
                   title: 'Artistes populaires',
                   subtitle: 'Recherche rapide par artiste',
                 ),
@@ -278,11 +278,11 @@ class _TopBanner extends StatelessWidget {
         padding: const EdgeInsets.all(20),
         child: Row(
           children: [
-            Expanded(
+            const Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
+                children: [
                   Text('Top Hits 2024',
                     style: TextStyle(
                       color: Colors.white, fontSize: 22,

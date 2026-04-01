@@ -174,24 +174,24 @@ class _AuthScreenState extends State<AuthScreen> {
                           color: Colors.white.withValues(alpha: 0.1),
                         ),
                       ),
-                      child: Column(
+                      child: const Column(
                         children: [
-                          const _FeatureRow(
+                          _FeatureRow(
                             icon: Icons.cloud_sync_rounded,
                             text: 'Synchronisation cloud',
                           ),
-                          const SizedBox(height: 12),
-                          const _FeatureRow(
+                          SizedBox(height: 12),
+                          _FeatureRow(
                             icon: Icons.favorite_rounded,
                             text: 'Favoris sauvegardés',
                           ),
-                          const SizedBox(height: 12),
-                          const _FeatureRow(
+                          SizedBox(height: 12),
+                          _FeatureRow(
                             icon: Icons.playlist_play_rounded,
                             text: 'Playlists personnalisées',
                           ),
-                          const SizedBox(height: 12),
-                          const _FeatureRow(
+                          SizedBox(height: 12),
+                          _FeatureRow(
                             icon: Icons.download_rounded,
                             text: 'Écoute hors ligne',
                           ),

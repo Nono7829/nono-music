@@ -34,7 +34,7 @@ class AuthService {
 
         // 1. Démarrer un mini-serveur local pour intercepter le retour de Google
         final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 3005);
-        final redirectUrl = 'http://localhost:3005/callback';
+        const redirectUrl = 'http://localhost:3005/callback';
 
         // 2. Ouvrir le navigateur en demandant à Supabase de revenir sur le port 3005
         await _supabase.client.auth.signInWithOAuth(
@@ -62,11 +62,9 @@ class AuthService {
 
             // 5. Donner le lien intercepté à Supabase pour valider la connexion Flutter !
             final response = await _supabase.client.auth.getSessionFromUrl(fullUri);
-            if (response.session != null) {
-              debugPrint('[AUTH] ✅ Connexion PC réussie');
-              return true;
-            }
-            return false;
+            debugPrint('[AUTH] ✅ Connexion PC réussie');
+            return true;
+                      return false;
           }
         }
         return false; 
