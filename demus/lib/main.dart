@@ -1,21 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:just_audio_background/just_audio_background.dart'; // AJOUTER CETTE LIGNE
+
 import 'services/music_provider.dart';
 import 'services/supabase_service.dart';
 import 'services/auth_service.dart';
 import 'screens/auth_screen.dart';
 import 'screens/main_navigation.dart';
 
-// Clé globale pour les SnackBars
-final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
-    GlobalKey<ScaffoldMessengerState>();
+final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Initialiser Supabase
-  await SupabaseService.initialize();
+  // ✅ INITIALISATION OBLIGATOIRE POUR ÉVITER LES CRASHS EN ARRIÈRE-PLAN
+  await JustAudioBackground.init(
+    androidNotificationChannelId: 'com.nonomusic.channel.audio',
+    androidNotificationChannelName: 'Nono Music',
+    androidNotificationOngoing: true,
+  );
   
+  await SupabaseService.initialize();
   runApp(const MyApp());
 }
 

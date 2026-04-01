@@ -17,12 +17,11 @@ class ProfileScreen extends StatelessWidget {
         slivers: [
           // App Bar avec profil
           SliverAppBar(
-            expandedHeight: 200,
+            expandedHeight: 220,
             pinned: true,
             backgroundColor: const Color(0xFF0A0A0A),
             leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                  color: Color(0xFFFF2D55)),
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFFFF2D55)),
               onPressed: () => Navigator.of(context).pop(),
             ),
             flexibleSpace: FlexibleSpaceBar(
@@ -42,19 +41,15 @@ class ProfileScreen extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const SizedBox(height: 40),
-                      // Avatar
                       Container(
                         width: 80,
                         height: 80,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          border: Border.all(
-                            color: const Color(0xFFFF2D55),
-                            width: 3,
-                          ),
+                          border: Border.all(color: const Color(0xFFFF2D55), width: 3),
                         ),
                         child: ClipOval(
-                          child: authService.userAvatar != null
+                          child: authService.userAvatar != null && authService.userAvatar!.isNotEmpty
                               ? Image.network(
                                   authService.userAvatar!,
                                   fit: BoxFit.cover,
@@ -64,21 +59,19 @@ class ProfileScreen extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      // Nom
                       Text(
-                        authService.userName ?? 'Utilisateur',
+                        authService.userName ?? 'Utilisateur Inconnu',
                         style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
                           color: Colors.white,
                         ),
                       ),
                       const SizedBox(height: 4),
-                      // Email
                       Text(
                         authService.userEmail ?? '',
                         style: const TextStyle(
-                          fontSize: 13,
+                          fontSize: 14,
                           color: Colors.grey,
                         ),
                       ),
@@ -89,198 +82,111 @@ class ProfileScreen extends StatelessWidget {
             ),
           ),
 
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
-                // Statistiques
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1C1C1E),
-                    borderRadius: BorderRadius.circular(16),
+          // Contenu (Statistiques et Paramètres)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Vos Statistiques',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      _StatColumn(
-                        value: '${provider.favoriteSongs.length}',
+                      _StatItem(
+                        icon: Icons.favorite_rounded,
+                        value: provider.favoriteSongs.length.toString(),
                         label: 'Favoris',
+                        color: const Color(0xFFFF2D55),
                       ),
-                      Container(
-                        width: 1,
-                        height: 40,
-                        color: Colors.white12,
-                      ),
-                      _StatColumn(
-                        value: '${provider.playlists.length}',
+                      _StatItem(
+                        icon: Icons.queue_music_rounded,
+                        value: provider.playlists.length.toString(),
                         label: 'Playlists',
+                        color: Colors.blue,
                       ),
-                      Container(
-                        width: 1,
-                        height: 40,
-                        color: Colors.white12,
-                      ),
-                      _StatColumn(
-                        value: '${provider.downloadedSongs.length}',
+                      _StatItem(
+                        icon: Icons.download_done_rounded,
+                        value: provider.downloadedSongs.length.toString(),
                         label: 'Téléchargés',
+                        color: const Color(0xFF30D158),
                       ),
                     ],
                   ),
-                ),
-
-                const SizedBox(height: 24),
-
-                // Synchronisation
-                const Text(
-                  'Synchronisation',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
+                  
+                  const SizedBox(height: 36),
+                  
+                  const Text(
+                    'Paramètres',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
                   ),
-                ),
-                const SizedBox(height: 12),
-
-                _SettingsTile(
-                  icon: Icons.cloud_sync_rounded,
-                  title: 'Synchroniser maintenant',
-                  subtitle: 'Enregistrer dans le cloud',
-                  onTap: () async {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('☁️ Synchronisation en cours...'),
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
-                    
-                    // Forcer la synchronisation
-                    await provider.loadFromSupabase();
-                    
-                    if (!context.mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        backgroundColor: Color(0xFF30D158),
-                        content: Text('✅ Synchronisé !',
-                            style: TextStyle(color: Colors.black)),
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
-                  },
-                ),
-
-                _SettingsTile(
-                  icon: Icons.autorenew_rounded,
-                  title: 'Lecture automatique',
-                  subtitle: provider.autoPlayNext
-                      ? 'Activée'
-                      : 'Désactivée',
-                  trailing: Switch(
-                    value: provider.autoPlayNext,
-                    onChanged: (_) => provider.toggleAutoPlay(),
-                    activeColor: const Color(0xFFFF2D55),
-                  ),
-                  onTap: () => provider.toggleAutoPlay(),
-                ),
-
-                const SizedBox(height: 24),
-
-                // Stockage
-                const Text(
-                  'Stockage',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 12),
-
-                _SettingsTile(
-                  icon: Icons.storage_rounded,
-                  title: 'Téléchargements',
-                  subtitle: '${provider.downloadedSongs.length} titre${provider.downloadedSongs.length != 1 ? 's' : ''}',
-                  onTap: () {},
-                ),
-
-                const SizedBox(height: 24),
-
-                // À propos
-                const Text(
-                  'À propos',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 12),
-
-                _SettingsTile(
-                  icon: Icons.info_outline_rounded,
-                  title: 'Version',
-                  subtitle: '1.0.0',
-                  onTap: () {},
-                ),
-
-                _SettingsTile(
-                  icon: Icons.privacy_tip_outlined,
-                  title: 'Confidentialité',
-                  onTap: () {},
-                ),
-
-                const SizedBox(height: 24),
-
-                // Déconnexion
-                const Text(
-                  'Compte',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 12),
-
-                _SettingsTile(
-                  icon: Icons.logout_rounded,
-                  title: 'Se déconnecter',
-                  subtitle: 'Vos données restent sauvegardées',
-                  iconColor: const Color(0xFFFF453A),
-                  onTap: () {
-                    showDialog(
-                      context: context,
-                      builder: (_) => AlertDialog(
-                        backgroundColor: const Color(0xFF1C1C1E),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                  const SizedBox(height: 16),
+                  
+                  // Synchronisation
+                  _SettingsTile(
+                    icon: Icons.sync_rounded,
+                    title: 'Synchroniser maintenant',
+                    subtitle: 'Forcer la mise à jour avec le cloud',
+                    iconColor: Colors.blueAccent,
+                    onTap: () async {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Synchronisation en cours...'),
+                          backgroundColor: Colors.blue,
                         ),
-                        title: const Text('Déconnexion',
-                            style: TextStyle(fontWeight: FontWeight.w700)),
-                        content: const Text(
-                          'Êtes-vous sûr de vouloir vous déconnecter ?\n\nVos données restent sauvegardées dans le cloud.',
-                          style: TextStyle(color: Colors.white70),
+                      );
+                      await provider.loadFromSupabase();
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Synchronisation terminée ✅'),
+                            backgroundColor: Color(0xFF30D158),
+                          ),
+                        );
+                      }
+                    },
+                  ),
+
+                  // Déconnexion
+                  _SettingsTile(
+                    icon: Icons.logout_rounded,
+                    title: 'Se déconnecter',
+                    subtitle: 'Vos données resteront sauvegardées',
+                    iconColor: const Color(0xFFFF453A),
+                    onTap: () async {
+                      // Confirmer avant de déconnecter
+                      final confirm = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          backgroundColor: const Color(0xFF1C1C1E),
+                          title: const Text('Déconnexion'),
+                          content: const Text('Êtes-vous sûr de vouloir vous déconnecter ?'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, false),
+                              child: const Text('Annuler', style: TextStyle(color: Colors.grey)),
+                            ),
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, true),
+                              child: const Text('Déconnexion', style: TextStyle(color: Color(0xFFFF453A))),
+                            ),
+                          ],
                         ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text('Annuler',
-                                style: TextStyle(color: Colors.grey)),
-                          ),
-                          TextButton(
-                            onPressed: () async {
-                              await authService.signOut();
-                              if (!context.mounted) return;
-                              Navigator.of(context).popUntil((route) => route.isFirst);
-                            },
-                            child: const Text('Déconnexion',
-                                style: TextStyle(
-                                  color: Color(0xFFFF453A),
-                                  fontWeight: FontWeight.w600,
-                                )),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ]),
+                      );
+
+                      if (confirm == true) {
+                        await authService.signOut();
+                      }
+                    },
+                  ),
+                  
+                  const SizedBox(height: 60), // Espace pour ne pas bloquer le mini-player
+                ],
+              ),
             ),
           ),
         ],
@@ -298,25 +204,40 @@ class ProfileScreen extends StatelessWidget {
   }
 }
 
-class _StatColumn extends StatelessWidget {
+class _StatItem extends StatelessWidget {
+  final IconData icon;
   final String value;
   final String label;
+  final Color color;
 
-  const _StatColumn({required this.value, required this.label});
+  const _StatItem({
+    required this.icon,
+    required this.value,
+    required this.label,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.15),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: color, size: 28),
+        ),
+        const SizedBox(height: 10),
         Text(
           value,
           style: const TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w900,
-            color: Color(0xFFFF2D55),
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
           ),
         ),
-        const SizedBox(height: 4),
         Text(
           label,
           style: const TextStyle(
@@ -349,31 +270,36 @@ class _SettingsTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: const Color(0xFF1C1C1E),
         borderRadius: BorderRadius.circular(12),
       ),
       child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         leading: Container(
-          padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
             color: iconColor.withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(10),
           ),
-          child: Icon(icon, color: iconColor, size: 20),
+          child: Icon(icon, color: iconColor, size: 22),
         ),
-        title: Text(title,
-            style: const TextStyle(
-              fontWeight: FontWeight.w500,
-              fontSize: 14,
-            )),
+        title: Text(
+          title,
+          style: const TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 15,
+            color: Colors.white,
+          ),
+        ),
         subtitle: subtitle != null
-            ? Text(subtitle!,
-                style: const TextStyle(color: Colors.grey, fontSize: 12))
+            ? Text(
+                subtitle!,
+                style: const TextStyle(color: Colors.grey, fontSize: 13),
+              )
             : null,
-        trailing: trailing ??
-            const Icon(Icons.chevron_right, color: Colors.grey, size: 20),
+        trailing: trailing ?? const Icon(Icons.chevron_right_rounded, color: Colors.grey),
         onTap: onTap,
       ),
     );
