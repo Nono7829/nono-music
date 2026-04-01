@@ -1,4 +1,4 @@
-name: demus
+name: nono_music
 description: Nono Music - lecteur musical personnel avec sync cloud
 
 publish_to: 'none'
@@ -31,8 +31,8 @@ dependencies:
   shared_preferences: ^2.2.2
   
   # Authentication & Database
-  supabase_flutter: ^2.3.4
-  google_sign_in: ^6.2.1
+  supabase_flutter: ^2.0.0
+  google_sign_in: ^6.1.0
   
   # Image picking
   image_picker: ^1.0.7

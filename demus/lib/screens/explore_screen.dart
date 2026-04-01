@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/music_provider.dart';
-import '../screens/main_navigation.dart';
+import 'main_navigation.dart';
 
 // ─── Données statiques des catégories ────────────────────────────────────────
 
@@ -133,10 +133,10 @@ class _ExploreScreenState extends State<ExploreScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14),
                       decoration: BoxDecoration(
-                        color: t.color.withValues(alpha: 0.15),
+                        color: t.color.withOpacity(0.15), // CORRIGÉ ICI
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: t.color.withValues(alpha: 0.3),
+                          color: t.color.withOpacity(0.3), // CORRIGÉ ICI
                         ),
                       ),
                       child: Row(
@@ -297,7 +297,7 @@ class _TopBanner extends StatelessWidget {
             ),
             Container(
               width: 52, height: 52,
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 color: Colors.white24,
                 shape: BoxShape.circle,
               ),
@@ -361,9 +361,9 @@ class _GenreCard extends StatelessWidget {
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
-          color: genre.color.withValues(alpha: 0.15),
+          color: genre.color.withOpacity(0.15), // CORRIGÉ ICI
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: genre.color.withValues(alpha: 0.35)),
+          border: Border.all(color: genre.color.withOpacity(0.35)), // CORRIGÉ ICI
         ),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         child: Row(
@@ -371,7 +371,7 @@ class _GenreCard extends StatelessWidget {
             Container(
               width: 36, height: 36,
               decoration: BoxDecoration(
-                color: genre.color.withValues(alpha: 0.2),
+                color: genre.color.withOpacity(0.2), // CORRIGÉ ICI
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(genre.icon, color: genre.color, size: 20),
@@ -389,7 +389,7 @@ class _GenreCard extends StatelessWidget {
               ),
             ),
             Icon(Icons.chevron_right,
-                color: genre.color.withValues(alpha: 0.6), size: 18),
+                color: genre.color.withOpacity(0.6), size: 18), // CORRIGÉ ICI
           ],
         ),
       ),

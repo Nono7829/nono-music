@@ -1,5 +1,4 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'dart:convert';
 import '../models/song.dart';
 
 class SupabaseService {
@@ -28,13 +27,6 @@ class SupabaseService {
   // ── Authentification ─────────────────────────────────────────────────────
   Stream<AuthState> get authStateChanges => client.auth.onAuthStateChange;
 
-  Future<AuthResponse> signInWithGoogle() async {
-    return await client.auth.signInWithOAuth(
-      OAuthProvider.google,
-      redirectTo: 'io.supabase.demus://login-callback/',
-    );
-  }
-
   Future<void> signOut() async {
     await client.auth.signOut();
   }
@@ -61,7 +53,7 @@ class SupabaseService {
 
     // Supprimer les anciens favoris
     await client.from('favorites').delete().eq('user_id', userId);
-    
+
     // Insérer les nouveaux
     if (data.isNotEmpty) {
       await client.from('favorites').insert(data);
@@ -141,7 +133,7 @@ class SupabaseService {
     final playlists = <Map<String, dynamic>>[];
     for (final item in response as List) {
       final playlistId = item['playlist_id'] as String;
-      
+
       // Récupérer les chansons de cette playlist
       final songsResponse = await client
           .from('playlist_songs')

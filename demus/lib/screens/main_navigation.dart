@@ -13,6 +13,11 @@ import 'profile_screen.dart';
 class MainNavigation extends StatefulWidget {
   const MainNavigation({super.key});
 
+  // AJOUT : Permet aux autres écrans de trouver ce widget
+  static _MainNavigationState? of(BuildContext context) {
+    return context.findAncestorStateOfType<_MainNavigationState>();
+  }
+
   @override
   State<MainNavigation> createState() => _MainNavigationState();
 }
@@ -20,12 +25,31 @@ class MainNavigation extends StatefulWidget {
 class _MainNavigationState extends State<MainNavigation> {
   int _currentIndex = 0;
 
-  final List<Widget> _screens = const [
-    HomeScreen(),
-    ExploreScreen(),
-    SearchScreen(),
-    LibraryScreen(),
+  // AJOUT : Contrôleur pour passer le texte à la recherche
+  final TextEditingController _searchController = TextEditingController();
+
+  // MODIFICATION : "late final" au lieu de "const" pour pouvoir passer le contrôleur
+  late final List<Widget> _screens = [
+    const HomeScreen(),
+    const ExploreScreen(),
+    SearchScreen(externalController: _searchController), // AJOUT DU CONTRÔLEUR ICI
+    const LibraryScreen(),
   ];
+
+  // AJOUT : La méthode appelée par ExploreScreen
+  void goToSearch(String query) {
+    setState(() {
+      _currentIndex = 2; // Va sur l'onglet recherche
+    });
+    _searchController.text = query; // Remplis le texte
+  }
+
+  // AJOUT : Nettoyage du contrôleur
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -68,7 +92,7 @@ class _MainNavigationState extends State<MainNavigation> {
       decoration: BoxDecoration(
         color: const Color(0xFF1C1C1E),
         border: Border(
-          top: BorderSide(color: Colors.white.withValues(alpha: 0.08), width: 0.5),
+          top: BorderSide(color: Colors.white.withOpacity(0.08), width: 0.5), // Remplacé withValues par withOpacity au cas où
         ),
       ),
       child: SafeArea(
