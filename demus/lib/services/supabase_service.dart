@@ -7,8 +7,8 @@ class SupabaseService {
   factory SupabaseService() => _instance;
   SupabaseService._internal();
 
-  static const String supabaseUrl = 'YOUR_SUPABASE_URL'; // À remplacer
-  static const String supabaseAnonKey = 'YOUR_SUPABASE_ANON_KEY'; // À remplacer
+  static const String supabaseUrl = 'https://jfgyatpymoleqlffcaqu.supabase.co'; // À remplacer
+  static const String supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpmZ3lhdHB5bW9sZXFsZmZjYXF1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ3ODMzNjksImV4cCI6MjA5MDM1OTM2OX0.bS0x0EGSnsv48ky03vfEkpJpFCsDCPO5-70fF_23a6Q'; // À remplacer
 
   SupabaseClient get client => Supabase.instance.client;
   User? get currentUser => client.auth.currentUser;
