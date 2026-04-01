@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/music_provider.dart';
+import '../services/auth_service.dart';
 import '../widgets/mini_player.dart';
 import '../widgets/full_screen_player.dart';
 import 'home_screen.dart';
+import 'explore_screen.dart';
 import 'search_screen.dart';
 import 'library_screen.dart';
+import 'profile_screen.dart';
 
 class MainNavigation extends StatefulWidget {
   const MainNavigation({super.key});
@@ -19,7 +22,7 @@ class _MainNavigationState extends State<MainNavigation> {
 
   final List<Widget> _screens = const [
     HomeScreen(),
-    Scaffold(body: Center(child: Text('Explorer - Bientôt disponible', style: TextStyle(color: Colors.grey)))),
+    ExploreScreen(),
     SearchScreen(),
     LibraryScreen(),
   ];
@@ -27,6 +30,7 @@ class _MainNavigationState extends State<MainNavigation> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<MusicProvider>();
+    final authService = AuthService();
 
     return Scaffold(
       backgroundColor: const Color(0xFF0A0A0A),
@@ -55,11 +59,11 @@ class _MainNavigationState extends State<MainNavigation> {
           ),
         ],
       ),
-      bottomNavigationBar: _buildNavBar(),
+      bottomNavigationBar: _buildNavBar(authService),
     );
   }
 
-  Widget _buildNavBar() {
+  Widget _buildNavBar(AuthService authService) {
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFF1C1C1E),
@@ -98,6 +102,16 @@ class _MainNavigationState extends State<MainNavigation> {
                 selected: _currentIndex == 3,
                 onTap: () => setState(() => _currentIndex = 3),
               ),
+              _ProfileNavItem(
+                selected: false,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                  );
+                },
+                avatarUrl: authService.userAvatar,
+              ),
             ],
           ),
         ),
@@ -126,7 +140,7 @@ class _NavItem extends StatelessWidget {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: SizedBox(
-        width: 90,
+        width: 70,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -145,6 +159,72 @@ class _NavItem extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ProfileNavItem extends StatelessWidget {
+  final bool selected;
+  final VoidCallback onTap;
+  final String? avatarUrl;
+
+  const _ProfileNavItem({
+    required this.selected,
+    required this.onTap,
+    this.avatarUrl,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        width: 70,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: selected ? const Color(0xFFFF2D55) : Colors.grey,
+                  width: 2,
+                ),
+              ),
+              child: ClipOval(
+                child: avatarUrl != null && avatarUrl!.isNotEmpty
+                    ? Image.network(
+                        avatarUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => _defaultAvatar(),
+                      )
+                    : _defaultAvatar(),
+              ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              'Profil',
+              style: TextStyle(
+                color: selected ? const Color(0xFFFF2D55) : Colors.grey,
+                fontSize: 10,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _defaultAvatar() {
+    return Container(
+      color: const Color(0xFFFF2D55),
+      child: const Center(
+        child: Icon(Icons.person, color: Colors.white, size: 16),
       ),
     );
   }

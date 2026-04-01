@@ -6,8 +6,12 @@ import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:just_audio_background/just_audio_background.dart';
+import 'package:audio_service/audio_service.dart';
 import 'package:rxdart/rxdart.dart';
 import '../models/song.dart';
+import 'supabase_service.dart';
+import 'auth_service.dart';
 
 class PositionData {
   final Duration position;
@@ -19,37 +23,42 @@ class PositionData {
 class MusicProvider with ChangeNotifier {
   static const String _baseUrl = 'http://localhost:3000';
 
-  // ── Clés SharedPreferences ─────────────────────────────────────────────────
+  // Services
+  final SupabaseService _supabase = SupabaseService();
+  final AuthService _auth = AuthService();
+
+  // ── Clés SharedPreferences (backup local) ───────────────────────────────
   static const _kPlaylists      = 'nono_playlists';
   static const _kFavorites      = 'nono_favorites';
   static const _kRecentlyPlayed = 'nono_recently_played';
   static const _kDownloads      = 'downloaded_songs';
 
-  // ── Recherche ──────────────────────────────────────────────────────────────
+  // ── Recherche ──────────────────────────────────────────────────────────
   List<Song> _songs       = [];
   bool _isLoading         = false;
   String? _errorMessage;
 
-  // ── Lecture ────────────────────────────────────────────────────────────────
+  // ── Lecture ────────────────────────────────────────────────────────────
   Song?      _currentSong;
   List<Song> _queue        = [];
   int        _currentIndex = -1;
   int        _loadId       = 0;
   bool       _isPlaying    = false;
   bool       _isAudioLoading = false;
+  bool       _autoPlayNext = true; // Lecture automatique activée par défaut
 
-  // ── Bibliothèque (persistées) ─────────────────────────────────────────────
+  // ── Bibliothèque (persistées localement + cloud) ───────────────────────
   List<Song>                   _favoriteSongs  = [];
   List<Song>                   _recentlyPlayed = [];
   List<Map<String, dynamic>>   _playlists      = [];
 
-  // ── Téléchargements ────────────────────────────────────────────────────────
+  // ── Téléchargements ────────────────────────────────────────────────────
   List<Song>           _downloadedSongs   = [];
   final Map<String, double> _downloadProgress = {};
 
   final AudioPlayer _player = AudioPlayer();
 
-  // ── Stream position ────────────────────────────────────────────────────────
+  // ── Stream position ────────────────────────────────────────────────────
   Stream<PositionData> get positionDataStream =>
       Rx.combineLatest3<Duration, Duration, Duration?, PositionData>(
         _player.positionStream,
@@ -59,8 +68,9 @@ class MusicProvider with ChangeNotifier {
       );
 
   AudioPlayer get audioPlayer => _player;
+  bool get autoPlayNext => _autoPlayNext;
 
-  // ── Getters ────────────────────────────────────────────────────────────────
+  // ── Getters ────────────────────────────────────────────────────────────
   List<Song>  get songs           => _songs;
   bool        get isLoading       => _isLoading;
   String?     get errorMessage    => _errorMessage;
@@ -73,12 +83,14 @@ class MusicProvider with ChangeNotifier {
   Map<String, double> get downloadProgress => _downloadProgress;
   List<Map<String, dynamic>> get playlists => _playlists;
 
-  // ── Constructeur ───────────────────────────────────────────────────────────
+  // ── Constructeur ───────────────────────────────────────────────────────
   MusicProvider() {
+    _initializeAudioService();
     _loadAllData();
 
+    // Lecture automatique du suivant quand une chanson se termine
     _player.processingStateStream.listen((state) {
-      if (state == ProcessingState.completed) {
+      if (state == ProcessingState.completed && _autoPlayNext) {
         _isPlaying = false;
         notifyListeners();
         Future.delayed(const Duration(milliseconds: 200), playNext);
@@ -93,7 +105,25 @@ class MusicProvider with ChangeNotifier {
     });
   }
 
-  // ── Sérialisation Song ─────────────────────────────────────────────────────
+  Future<void> _initializeAudioService() async {
+    try {
+      await JustAudioBackground.init(
+        androidNotificationChannelId: 'com.nonomusic.app.channel.audio',
+        androidNotificationChannelName: 'Nono Music',
+        androidNotificationOngoing: true,
+        androidStopForegroundOnPause: true,
+      );
+    } catch (e) {
+      debugPrint('[AUDIO_SERVICE] Erreur init : $e');
+    }
+  }
+
+  void toggleAutoPlay() {
+    _autoPlayNext = !_autoPlayNext;
+    notifyListeners();
+  }
+
+  // ── Sérialisation Song ─────────────────────────────────────────────────
   static Map<String, dynamic> _songToJson(Song s) => {
     'id': s.id, 'title': s.title, 'artist': s.artist,
     'duration': s.duration, 'coverUrl': s.coverUrl,
@@ -107,7 +137,39 @@ class MusicProvider with ChangeNotifier {
     coverUrl: (j['coverUrl'] as String?) ?? '',
   );
 
-  // ── Chargement complet au démarrage ───────────────────────────────────────
+  // ── Chargement depuis Supabase (prioritaire) ──────────────────────────
+  Future<void> loadFromSupabase() async {
+    if (!_auth.isAuthenticated) {
+      await _loadAllData(); // Fallback local
+      return;
+    }
+
+    try {
+      debugPrint('[SYNC] Chargement depuis Supabase...');
+      
+      // Charger les favoris
+      _favoriteSongs = await _supabase.getFavorites();
+      
+      // Charger les playlists
+      final cloudPlaylists = await _supabase.getPlaylists();
+      _playlists = cloudPlaylists;
+      
+      // Charger l'historique
+      _recentlyPlayed = await _supabase.getRecentlyPlayed();
+      
+      // Charger les téléchargements (local uniquement)
+      await _loadDownloads();
+      
+      debugPrint('[SYNC] ✅ ${_favoriteSongs.length} favoris, ${_playlists.length} playlists');
+      notifyListeners();
+      
+    } catch (e) {
+      debugPrint('[SYNC] ❌ Erreur : $e');
+      await _loadAllData(); // Fallback local
+    }
+  }
+
+  // ── Chargement local (backup) ──────────────────────────────────────────
   Future<void> _loadAllData() async {
     final prefs = await SharedPreferences.getInstance();
     try {
@@ -138,18 +200,14 @@ class MusicProvider with ChangeNotifier {
           return {
             'id':    pl['id']   as String,
             'name':  pl['name'] as String,
+            'coverUrl': pl['coverUrl'] as String?,
             'songs': songs,
           };
         }).cast<Map<String, dynamic>>().toList();
       }
 
       // Téléchargements
-      final dlRaw = prefs.getString(_kDownloads);
-      if (dlRaw != null) {
-        _downloadedSongs = (jsonDecode(dlRaw) as List)
-            .map((j) => _songFromJson(j as Map<String, dynamic>))
-            .toList();
-      }
+      await _loadDownloads();
 
       notifyListeners();
     } catch (e) {
@@ -157,17 +215,45 @@ class MusicProvider with ChangeNotifier {
     }
   }
 
-  // ── Sauvegarde sélective ───────────────────────────────────────────────────
+  Future<void> _loadDownloads() async {
+    final prefs = await SharedPreferences.getInstance();
+    final dlRaw = prefs.getString(_kDownloads);
+    if (dlRaw != null) {
+      _downloadedSongs = (jsonDecode(dlRaw) as List)
+          .map((j) => _songFromJson(j as Map<String, dynamic>))
+          .toList();
+    }
+  }
+
+  // ── Sauvegarde avec sync cloud ─────────────────────────────────────────
   Future<void> _saveFavorites() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kFavorites,
         jsonEncode(_favoriteSongs.map(_songToJson).toList()));
+    
+    // Sync cloud
+    if (_auth.isAuthenticated) {
+      try {
+        await _supabase.syncFavorites(_favoriteSongs);
+      } catch (e) {
+        debugPrint('[SYNC] Erreur sync favoris : $e');
+      }
+    }
   }
 
   Future<void> _saveRecentlyPlayed() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kRecentlyPlayed,
         jsonEncode(_recentlyPlayed.map(_songToJson).toList()));
+    
+    // Sync cloud
+    if (_auth.isAuthenticated) {
+      try {
+        await _supabase.syncRecentlyPlayed(_recentlyPlayed);
+      } catch (e) {
+        debugPrint('[SYNC] Erreur sync historique : $e');
+      }
+    }
   }
 
   Future<void> _savePlaylists() async {
@@ -175,9 +261,19 @@ class MusicProvider with ChangeNotifier {
     final data = _playlists.map((pl) => {
       'id':    pl['id'],
       'name':  pl['name'],
+      'coverUrl': pl['coverUrl'],
       'songs': (pl['songs'] as List<Song>).map(_songToJson).toList(),
     }).toList();
     await prefs.setString(_kPlaylists, jsonEncode(data));
+    
+    // Sync cloud
+    if (_auth.isAuthenticated) {
+      try {
+        await _supabase.syncPlaylists(_playlists);
+      } catch (e) {
+        debugPrint('[SYNC] Erreur sync playlists : $e');
+      }
+    }
   }
 
   Future<void> _saveDownloads() async {
@@ -186,7 +282,7 @@ class MusicProvider with ChangeNotifier {
         jsonEncode(_downloadedSongs.map(_songToJson).toList()));
   }
 
-  // ── Recherche ──────────────────────────────────────────────────────────────
+  // ── Recherche ──────────────────────────────────────────────────────────
   Future<void> searchYouTube(String query) async {
     if (query.trim().isEmpty) return;
     _isLoading    = true;
@@ -228,7 +324,7 @@ class MusicProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // ── LECTURE ────────────────────────────────────────────────────────────────
+  // ── LECTURE avec notification arrière-plan ─────────────────────────────
   Future<void> playSong(Song song, {List<Song>? queue}) async {
     final myId = ++_loadId;
 
@@ -256,17 +352,28 @@ class MusicProvider with ChangeNotifier {
       final audioSource = await _resolveSource(song);
       if (myId != _loadId) return;
 
-      if (audioSource.startsWith('http')) {
-        await _player.setUrl(audioSource);
-      } else {
-        try {
-          await _player.setFilePath(audioSource);
-        } catch (e) {
-          debugPrint('[FLUTTER] setFilePath failed, fallback proxy: $e');
-          if (myId != _loadId) return;
-          await _player.setUrl('$_baseUrl/proxy/${song.id}');
-        }
-      }
+      // Créer la source audio avec métadonnées pour notification
+      final source = audioSource.startsWith('http')
+          ? AudioSource.uri(
+              Uri.parse(audioSource),
+              tag: MediaItem(
+                id: song.id,
+                title: song.title,
+                artist: song.artist,
+                artUri: Uri.parse(song.coverUrl),
+              ),
+            )
+          : AudioSource.file(
+              audioSource,
+              tag: MediaItem(
+                id: song.id,
+                title: song.title,
+                artist: song.artist,
+                artUri: Uri.parse(song.coverUrl),
+              ),
+            );
+
+      await _player.setAudioSource(source);
       if (myId != _loadId) return;
 
       _isAudioLoading = false;
@@ -298,7 +405,7 @@ class MusicProvider with ChangeNotifier {
     return '$_baseUrl/proxy/${song.id}';
   }
 
-  // ── Contrôles ──────────────────────────────────────────────────────────────
+  // ── Contrôles ──────────────────────────────────────────────────────────
   void togglePlayPause() {
     if (_isAudioLoading) return;
     if (_isPlaying) {
@@ -323,6 +430,7 @@ class MusicProvider with ChangeNotifier {
     if (_currentIndex >= 0 && _currentIndex < _queue.length - 1) {
       playSong(_queue[_currentIndex + 1], queue: _queue);
     } else {
+      // Fin de la file d'attente
       _isPlaying      = false;
       _isAudioLoading = false;
       notifyListeners();
@@ -345,7 +453,7 @@ class MusicProvider with ChangeNotifier {
     }
   }
 
-  // ── Favoris (persistés) ───────────────────────────────────────────────────
+  // ── Favoris (persistés + cloud) ────────────────────────────────────────
   void toggleFavorite(Song song) {
     if (_favoriteSongs.any((s) => s.id == song.id)) {
       _favoriteSongs.removeWhere((s) => s.id == song.id);
@@ -358,11 +466,12 @@ class MusicProvider with ChangeNotifier {
 
   bool isFavorite(Song song) => _favoriteSongs.any((s) => s.id == song.id);
 
-  // ── Playlists (persistées) ────────────────────────────────────────────────
-  void createPlaylist(String name) {
+  // ── Playlists (persistées + cloud) ─────────────────────────────────────
+  void createPlaylist(String name, {String? coverUrl}) {
     _playlists.add({
       'id':    DateTime.now().millisecondsSinceEpoch.toString(),
       'name':  name,
+      'coverUrl': coverUrl,
       'songs': <Song>[],
     });
     _savePlaylists();
@@ -380,6 +489,16 @@ class MusicProvider with ChangeNotifier {
       (p) => p['id'] == playlistId, orElse: () => {});
     if (pl.isNotEmpty) {
       pl['name'] = newName;
+      _savePlaylists();
+      notifyListeners();
+    }
+  }
+
+  void updatePlaylistCover(String playlistId, String coverUrl) {
+    final pl = _playlists.firstWhere(
+      (p) => p['id'] == playlistId, orElse: () => {});
+    if (pl.isNotEmpty) {
+      pl['coverUrl'] = coverUrl;
       _savePlaylists();
       notifyListeners();
     }
@@ -415,7 +534,35 @@ class MusicProvider with ChangeNotifier {
     return List<Song>.from(pl['songs'] as List<Song>);
   }
 
-  // ── Téléchargements ────────────────────────────────────────────────────────
+  // Télécharger toute une playlist
+  Future<void> downloadPlaylist(String playlistId, {VoidCallback? onComplete}) async {
+    final songs = await getPlaylistSongs(playlistId);
+    int completed = 0;
+    
+    for (final song in songs) {
+      if (!isDownloaded(song)) {
+        await downloadSong(song);
+        completed++;
+      }
+    }
+    
+    if (completed > 0) {
+      onComplete?.call();
+    }
+  }
+
+  bool isPlaylistFullyDownloaded(String playlistId) {
+    final pl = _playlists.firstWhere(
+      (p) => p['id'] == playlistId, orElse: () => {});
+    if (pl.isEmpty) return false;
+    
+    final songs = pl['songs'] as List<Song>;
+    if (songs.isEmpty) return false;
+    
+    return songs.every((s) => isDownloaded(s));
+  }
+
+  // ── Téléchargements ────────────────────────────────────────────────────
   bool isDownloaded(Song song) => _downloadedSongs.any((s) => s.id == song.id);
 
   Future<void> downloadSong(Song song, {VoidCallback? onComplete}) async {

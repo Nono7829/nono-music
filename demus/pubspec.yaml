@@ -1,5 +1,5 @@
 name: demus
-description: Nono Music - lecteur musical personnel
+description: Nono Music - lecteur musical personnel avec sync cloud
 
 publish_to: 'none'
 
@@ -11,15 +11,34 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  
+  # State management
   provider: ^6.1.0
-  http: ^1.2.0              # ← Ajouté pour appeler le backend Node.js
+  
+  # Network
+  http: ^1.2.0
+  dio: ^5.4.1
+  
+  # Audio
   just_audio: ^0.10.0
   just_audio_windows: 0.2.2
+  just_audio_background: ^0.0.1-beta.11
+  audio_service: ^0.18.12
   rxdart: ^0.27.7
+  
+  # Storage
   path_provider: ^2.1.2
   shared_preferences: ^2.2.2
-  dio: ^5.4.1
-  # youtube_explode_dart supprimé (on passe par le backend)
+  
+  # Authentication & Database
+  supabase_flutter: ^2.3.4
+  google_sign_in: ^6.2.1
+  
+  # Image picking
+  image_picker: ^1.0.7
+  
+  # Utils
+  uuid: ^4.3.3
 
 dev_dependencies:
   flutter_test:
