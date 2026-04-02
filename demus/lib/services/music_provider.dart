@@ -24,10 +24,7 @@ class PositionData {
 }
 
 class MusicProvider with ChangeNotifier {
-  static const String _baseUrl = String.fromEnvironment(
-    'BACKEND_URL',
-    defaultValue: 'https://nono-music.railway.app', // ← your actual domain
-  );
+static const String _baseUrl = 'https://nono-music.onrender.com';
 
   final SupabaseService _supabase = SupabaseService();
   final AuthService _auth = AuthService();

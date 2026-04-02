@@ -3,16 +3,12 @@ const cors         = require('cors');
 const { exec }     = require('child_process');
 const https        = require('https');
 const http         = require('http');
-const path         = require('path');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
-// In production (Docker), yt-dlp is in PATH.
-// In development, use the local binary installed by youtube-dl-exec.
-const YT_DLP = process.env.NODE_ENV === 'production'
-  ? 'yt-dlp'
-  : path.join(__dirname, 'node_modules', 'youtube-dl-exec', 'bin', 'yt-dlp');
+// Utiliser la commande système yt-dlp (installée via pip dans le Dockerfile)
+const YT_DLP = 'yt-dlp';
 
 app.use(cors({
   origin: process.env.ALLOWED_ORIGINS
