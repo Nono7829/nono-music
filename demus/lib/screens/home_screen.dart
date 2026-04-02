@@ -110,8 +110,8 @@ class _RecentlyPlayedSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: AppSpacing.lg),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenHPad),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: AppSpacing.screenHPad),
           child: Text('Recently played', style: AppTextStyles.sectionHeader),
         ),
         const SizedBox(height: AppSpacing.md),
@@ -204,8 +204,8 @@ class _FavoritesSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenHPad),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: AppSpacing.screenHPad),
           child: Text('Your favorites', style: AppTextStyles.sectionHeader),
         ),
         const SizedBox(height: AppSpacing.sm),
@@ -290,9 +290,9 @@ class _WelcomeState extends StatelessWidget {
                 const Icon(Icons.music_note, color: AppColors.accent, size: 40),
           ),
           const SizedBox(height: AppSpacing.lg),
-          Text('Welcome to Nono Music', style: AppTextStyles.title3),
+          const Text('Welcome to Nono Music', style: AppTextStyles.title3),
           const SizedBox(height: AppSpacing.sm),
-          Text(
+          const Text(
             'Search for something to start listening.',
             style: AppTextStyles.subhead,
             textAlign: TextAlign.center,

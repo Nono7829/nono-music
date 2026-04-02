@@ -98,7 +98,7 @@ class ExploreScreen extends StatelessWidget {
             flexibleSpace: FlexibleSpaceBar(
               titlePadding: const EdgeInsets.only(
                   left: AppSpacing.screenHPad, bottom: AppSpacing.md),
-              title: Text('Explore', style: AppTextStyles.title1),
+              title: const Text('Explore', style: AppTextStyles.title1),
               background: Container(color: AppColors.background),
             ),
           ),
@@ -121,7 +121,7 @@ class ExploreScreen extends StatelessWidget {
                 const SizedBox(height: AppSpacing.xxl),
 
                 // Charts
-                _SectionLabel(
+                const _SectionLabel(
                     title: 'Charts',
                     subtitle: 'What\'s trending right now'),
                 const SizedBox(height: AppSpacing.md),
@@ -145,7 +145,7 @@ class ExploreScreen extends StatelessWidget {
                 const SizedBox(height: AppSpacing.xxl),
 
                 // Moods
-                _SectionLabel(
+                const _SectionLabel(
                     title: 'Moods & moments',
                     subtitle: 'A playlist for every feeling'),
                 const SizedBox(height: AppSpacing.md),
@@ -160,7 +160,7 @@ class ExploreScreen extends StatelessWidget {
                 const SizedBox(height: AppSpacing.xxl),
 
                 // Genres
-                _SectionLabel(
+                const _SectionLabel(
                     title: 'Genres',
                     subtitle: 'Dive into a sound'),
                 const SizedBox(height: AppSpacing.md),
@@ -175,7 +175,7 @@ class ExploreScreen extends StatelessWidget {
                 const SizedBox(height: AppSpacing.xxl),
 
                 // Artists
-                _SectionLabel(
+                const _SectionLabel(
                     title: 'Popular artists',
                     subtitle: 'Quick search by artist'),
                 const SizedBox(height: AppSpacing.md),

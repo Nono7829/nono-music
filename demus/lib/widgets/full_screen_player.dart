@@ -152,19 +152,19 @@ class FullScreenPlayer extends StatelessWidget {
                   ),
 
                   // Controls
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(
                         AppSpacing.lg, AppSpacing.sm,
                         AppSpacing.lg, 0),
-                    child: const _ControlRow(),
+                    child: _ControlRow(),
                   ),
 
                   // Volume
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(
                         AppSpacing.xl, AppSpacing.md,
                         AppSpacing.xl, 0),
-                    child: const _VolumeSlider(),
+                    child: _VolumeSlider(),
                   ),
                   const SizedBox(height: AppSpacing.lg),
                 ],

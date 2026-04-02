@@ -70,7 +70,7 @@ class _SearchScreenState extends State<SearchScreen> {
               titlePadding: const EdgeInsets.only(
                   left: AppSpacing.screenHPad,
                   bottom: AppSpacing.md),
-              title: Text('Search', style: AppTextStyles.title1),
+              title: const Text('Search', style: AppTextStyles.title1),
               background: Container(color: AppColors.background),
             ),
           ),

@@ -37,7 +37,7 @@ abstract final class AppTheme {
         titleTextStyle: AppTextStyles.title1,
       ),
 
-      textTheme: TextTheme(
+      textTheme: const TextTheme(
         displayLarge:  AppTextStyles.largeTitle,
         displayMedium: AppTextStyles.title1,
         displaySmall:  AppTextStyles.title2,
@@ -101,7 +101,7 @@ abstract final class AppTheme {
         ),
       ),
 
-      dialogTheme: DialogTheme(
+      dialogTheme: DialogThemeData(
         backgroundColor: AppColors.surfaceElevated,
         elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),

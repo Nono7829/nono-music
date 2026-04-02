@@ -261,9 +261,9 @@ class _SettingsTile extends StatelessWidget {
   const _SettingsTile({
     required this.icon,
     required this.title,
-    this.trailing,
     this.subtitle,
     this.iconColor = Colors.white,
+    this.trailing,
     this.onTap,
   });
 
