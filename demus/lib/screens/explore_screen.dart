@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+import '../core/constants/app_spacing.dart';
+import '../core/theme/app_colors.dart';
+import '../core/theme/app_text_styles.dart';
 import '../services/music_provider.dart';
 import 'main_navigation.dart';
 
-// ─── Données statiques des catégories ────────────────────────────────────────
+// ── Data models ───────────────────────────────────────────────────────────────
 
 class _Genre {
   final String label;
@@ -13,21 +17,6 @@ class _Genre {
   const _Genre(this.label, this.query, this.color, this.icon);
 }
 
-const _genres = [
-  _Genre('Rap FR',      'rap français 2024',       Color(0xFF8B5CF6), Icons.mic_rounded),
-  _Genre('Pop',         'pop hits 2024',            Color(0xFFEC4899), Icons.star_rounded),
-  _Genre('R&B / Soul',  'rnb soul hits',            Color(0xFFF59E0B), Icons.favorite_rounded),
-  _Genre('Hip-Hop',     'hip hop hits',             Color(0xFF3B82F6), Icons.headphones_rounded),
-  _Genre('Électro',     'electronic dance music',   Color(0xFF06B6D4), Icons.equalizer_rounded),
-  _Genre('Afrobeats',   'afrobeats hits 2024',      Color(0xFF10B981), Icons.music_note_rounded),
-  _Genre('Drill',       'drill music 2024',         Color(0xFF6366F1), Icons.bolt_rounded),
-  _Genre('Classique',   'musique classique',        Color(0xFF64748B), Icons.piano_rounded),
-  _Genre('Jazz',        'jazz music best',          Color(0xFFD97706), Icons.queue_music_rounded),
-  _Genre('Reggaeton',   'reggaeton hits 2024',      Color(0xFFEF4444), Icons.celebration_rounded),
-  _Genre('K-Pop',       'kpop hits 2024',           Color(0xFFF43F5E), Icons.album_rounded),
-  _Genre('Rock',        'rock classics',            Color(0xFF475569), Icons.electric_bolt_rounded),
-];
-
 class _Chart {
   final String label;
   final String query;
@@ -35,28 +24,61 @@ class _Chart {
   const _Chart(this.label, this.query, this.emoji);
 }
 
-const _charts = [
-  _Chart('Top France',       'top hits france 2024',       '🇫🇷'),
-  _Chart('Top Mondial',      'top world hits 2024',        '🌍'),
-  _Chart('Rap FR Charts',    'top rap français 2024',      '🎤'),
-  _Chart('Nouvelles sorties','nouveautés musique 2024',    '🆕'),
-  _Chart('Années 2000',      'hits années 2000',           '💿'),
-  _Chart('Années 90',        'best hits 90s',              '📼'),
-];
-
-// ─── Écran principal ──────────────────────────────────────────────────────────
-
-class ExploreScreen extends StatefulWidget {
-  const ExploreScreen({super.key});
-
-  @override
-  State<ExploreScreen> createState() => _ExploreScreenState();
+class _Mood {
+  final String emoji;
+  final String label;
+  final String query;
+  final Color  color;
+  const _Mood(this.emoji, this.label, this.query, this.color);
 }
 
-class _ExploreScreenState extends State<ExploreScreen> {
+const List<_Genre> _genres = [
+  _Genre('Rap FR',    'rap français 2024',      Color(0xFF8B5CF6), Icons.mic_rounded),
+  _Genre('Pop',       'pop hits 2024',           Color(0xFFEC4899), Icons.star_rounded),
+  _Genre('R&B / Soul','rnb soul hits',           Color(0xFFF59E0B), Icons.favorite_rounded),
+  _Genre('Hip-Hop',   'hip hop hits',            Color(0xFF3B82F6), Icons.headphones_rounded),
+  _Genre('Électro',   'electronic dance music',  Color(0xFF06B6D4), Icons.equalizer_rounded),
+  _Genre('Afrobeats', 'afrobeats hits 2024',     Color(0xFF10B981), Icons.music_note_rounded),
+  _Genre('Drill',     'drill music 2024',        Color(0xFF6366F1), Icons.bolt_rounded),
+  _Genre('Classique', 'musique classique',       Color(0xFF64748B), Icons.piano_rounded),
+  _Genre('Jazz',      'jazz music best',         Color(0xFFD97706), Icons.queue_music_rounded),
+  _Genre('Reggaeton', 'reggaeton hits 2024',     Color(0xFFEF4444), Icons.celebration_rounded),
+  _Genre('K-Pop',     'kpop hits 2024',          Color(0xFFF43F5E), Icons.album_rounded),
+  _Genre('Rock',      'rock classics',           Color(0xFF475569), Icons.electric_bolt_rounded),
+];
 
-  void _launchSearch(String query) {
-    // Déclenche la recherche et navigue vers l'onglet Recherche
+const List<_Chart> _charts = [
+  _Chart('Top France',       'top hits france 2024',    '🇫🇷'),
+  _Chart('Top Mondial',      'top world hits 2024',     '🌍'),
+  _Chart('Rap FR Charts',    'top rap français 2024',   '🎤'),
+  _Chart('Nouvelles sorties','nouveautés musique 2024', '🆕'),
+  _Chart('Années 2000',      'hits années 2000',        '💿'),
+  _Chart('Années 90',        'best hits 90s',           '📼'),
+];
+
+const List<_Mood> _moods = [
+  _Mood('😊', 'Bonne humeur',  'feel good music',         Color(0xFFFBBF24)),
+  _Mood('🧠', 'Concentration', 'focus study music',       Color(0xFF60A5FA)),
+  _Mood('💪', 'Sport',         'workout motivation music', Color(0xFF34D399)),
+  _Mood('😌', 'Détente',       'chill relaxing music',    Color(0xFFA78BFA)),
+  _Mood('🎉', 'Soirée',        'party hits music',        Color(0xFFF87171)),
+  _Mood('🕰️', 'Nostalgie',    'nostalgia classics hits', Color(0xFFFB923C)),
+];
+
+const List<String> _artists = [
+  'PLK', 'Damso', 'Ninho', 'Aya Nakamura',
+  'Jul', 'Hamza', 'Freeze Corleone', 'Stromae',
+  'Nekfeu', 'SCH', 'Gims', 'Orelsan',
+  'Drake', 'Travis Scott', 'Kendrick Lamar', 'The Weeknd',
+  'Taylor Swift', 'Dua Lipa', 'Bad Bunny', 'Rosalía',
+];
+
+// ── Screen ────────────────────────────────────────────────────────────────────
+
+class ExploreScreen extends StatelessWidget {
+  const ExploreScreen({super.key});
+
+  void _search(BuildContext context, String query) {
     context.read<MusicProvider>().searchYouTube(query);
     MainNavigation.of(context)?.goToSearch(query);
   }
@@ -64,158 +86,106 @@ class _ExploreScreenState extends State<ExploreScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0A0A),
+      backgroundColor: AppColors.background,
       body: CustomScrollView(
+        physics: const BouncingScrollPhysics(),
         slivers: [
-          // ── App Bar ──────────────────────────────────────────────────────
+          // ── App Bar ───────────────────────────────────────────────────────
           SliverAppBar(
             expandedHeight: 110,
             pinned: true,
-            backgroundColor: const Color(0xFF0A0A0A),
+            backgroundColor: AppColors.background,
             flexibleSpace: FlexibleSpaceBar(
-              titlePadding: const EdgeInsets.only(left: 20, bottom: 16),
-              title: const Text('Explorer',
-                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.w700)),
-              background: Container(color: const Color(0xFF0A0A0A)),
+              titlePadding: const EdgeInsets.only(
+                  left: AppSpacing.screenHPad, bottom: AppSpacing.md),
+              title: Text('Explore', style: AppTextStyles.title1),
+              background: Container(color: AppColors.background),
             ),
           ),
 
+          // ── Content ───────────────────────────────────────────────────────
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 150),
+            padding:
+                const EdgeInsets.only(bottom: AppSpacing.bottomPad),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
-
-                // ── Bannière top ─────────────────────────────────────────
-                _TopBanner(onTap: () => _launchSearch('top hits 2024')),
-                const SizedBox(height: 28),
-
-                // ── Charts ───────────────────────────────────────────────
-                const _SectionHeader(
-                  title: 'Classements',
-                  subtitle: 'Les titres qui cartonnent',
+                // Hero banner
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.screenHPad, AppSpacing.sm,
+                      AppSpacing.screenHPad, 0),
+                  child: _HeroBanner(
+                    onTap: () => _search(context, 'top hits 2024'),
+                  ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: AppSpacing.xxl),
+
+                // Charts
+                _SectionLabel(
+                    title: 'Charts',
+                    subtitle: 'What\'s trending right now'),
+                const SizedBox(height: AppSpacing.md),
                 SizedBox(
-                  height: 90,
+                  height: 88,
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.screenHPad),
                     itemCount: _charts.length,
-                    itemBuilder: (_, i) => _ChartChip(
-                      chart: _charts[i],
-                      onTap: () => _launchSearch(_charts[i].query),
+                    itemBuilder: (_, i) => Padding(
+                      padding: const EdgeInsets.only(right: AppSpacing.sm),
+                      child: _ChartChip(
+                        chart: _charts[i],
+                        onTap: () => _search(context, _charts[i].query),
+                      ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 28),
+                const SizedBox(height: AppSpacing.xxl),
 
-                // ── Humeurs / Moments ─────────────────────────────────────
-                const _SectionHeader(
-                  title: 'Humeurs & moments',
-                  subtitle: 'Une playlist pour chaque instant',
-                ),
-                const SizedBox(height: 14),
-                GridView.count(
-                  crossAxisCount: 2,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: 2.8,
-                  children: [
-                    _MoodTile('Bonne humeur 😊', 'feel good music', const Color(0xFFFBBF24)),
-                    _MoodTile('Concentration 🧠', 'focus study music', const Color(0xFF60A5FA)),
-                    _MoodTile('Sport 💪', 'workout motivation music', const Color(0xFF34D399)),
-                    _MoodTile('Détente 😌', 'chill relaxing music', const Color(0xFFA78BFA)),
-                    _MoodTile('Soirée 🎉', 'party hits music', const Color(0xFFF87171)),
-                    _MoodTile('Nostalgie 🕰️', 'nostalgia classics hits', const Color(0xFFFB923C)),
-                  ].map((t) => GestureDetector(
-                    onTap: () => _launchSearch(t.query),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                      decoration: BoxDecoration(
-                        color: t.color.withOpacity(0.15), // CORRIGÉ ICI
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: t.color.withOpacity(0.3), // CORRIGÉ ICI
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Text(t.emoji, style: const TextStyle(fontSize: 20)),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(t.label,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: t.color,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  )).toList(),
-                ),
-                const SizedBox(height: 28),
-
-                // ── Genres ───────────────────────────────────────────────
-                const _SectionHeader(
-                  title: 'Genres',
-                  subtitle: 'Plongez dans un style musical',
-                ),
-                const SizedBox(height: 14),
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                    childAspectRatio: 1.9,
-                  ),
-                  itemCount: _genres.length,
-                  itemBuilder: (_, i) => _GenreCard(
-                    genre: _genres[i],
-                    onTap: () => _launchSearch(_genres[i].query),
+                // Moods
+                _SectionLabel(
+                    title: 'Moods & moments',
+                    subtitle: 'A playlist for every feeling'),
+                const SizedBox(height: AppSpacing.md),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.screenHPad),
+                  child: _MoodGrid(
+                    moods: _moods,
+                    onTap: (m) => _search(context, m.query),
                   ),
                 ),
-                const SizedBox(height: 28),
+                const SizedBox(height: AppSpacing.xxl),
 
-                // ── Artistes populaires ───────────────────────────────────
-                const _SectionHeader(
-                  title: 'Artistes populaires',
-                  subtitle: 'Recherche rapide par artiste',
+                // Genres
+                _SectionLabel(
+                    title: 'Genres',
+                    subtitle: 'Dive into a sound'),
+                const SizedBox(height: AppSpacing.md),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.screenHPad),
+                  child: _GenreGrid(
+                    genres: _genres,
+                    onTap: (g) => _search(context, g.query),
+                  ),
                 ),
-                const SizedBox(height: 14),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: [
-                    'PLK', 'Damso', 'Ninho', 'Aya Nakamura',
-                    'Jul', 'Hamza', 'Freeze Corleone', 'Stromae',
-                    'Nekfeu', 'SCH', 'Gims', 'Orelsan',
-                    'Drake', 'Travis Scott', 'Kendrick Lamar', 'The Weeknd',
-                    'Taylor Swift', 'Dua Lipa', 'Bad Bunny', 'Rosalía',
-                  ].map((artist) => GestureDetector(
-                    onTap: () => _launchSearch(artist),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1C1C1E),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.white12),
-                      ),
-                      child: Text(artist,
-                        style: const TextStyle(
-                          color: Colors.white, fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  )).toList(),
+                const SizedBox(height: AppSpacing.xxl),
+
+                // Artists
+                _SectionLabel(
+                    title: 'Popular artists',
+                    subtitle: 'Quick search by artist'),
+                const SizedBox(height: AppSpacing.md),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.screenHPad),
+                  child: _ArtistPills(
+                    artists: _artists,
+                    onTap: (a) => _search(context, a),
+                  ),
                 ),
               ]),
             ),
@@ -226,79 +196,45 @@ class _ExploreScreenState extends State<ExploreScreen> {
   }
 }
 
-// ─── Widgets internes ─────────────────────────────────────────────────────────
+// ── Hero Banner ───────────────────────────────────────────────────────────────
 
-class _MoodTile {
-  final String label;
-  final String query;
-  final Color  color;
-  final String emoji;
-  _MoodTile(String labelWithEmoji, this.query, this.color)
-    : label = labelWithEmoji.replaceAll(RegExp(r'[\u{1F000}-\u{1FFFF}]', unicode: true), '').trim(),
-      emoji = RegExp(r'[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}]', unicode: true)
-              .firstMatch(labelWithEmoji)?.group(0) ?? '';
-}
-
-class _SectionHeader extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  const _SectionHeader({required this.title, required this.subtitle});
-
-  @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(title,
-        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-      const SizedBox(height: 2),
-      Text(subtitle,
-        style: const TextStyle(color: Colors.grey, fontSize: 13)),
-    ],
-  );
-}
-
-class _TopBanner extends StatelessWidget {
+class _HeroBanner extends StatelessWidget {
   final VoidCallback onTap;
-  const _TopBanner({required this.onTap});
+  const _HeroBanner({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        height: 120,
+        height: 128,
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFFFF2D55), Color(0xFFFF6B35)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(16),
+          gradient: AppColors.accentGradient,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
         ),
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(AppSpacing.lg),
         child: Row(
           children: [
-            const Expanded(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text('Top Hits 2024',
-                    style: TextStyle(
-                      color: Colors.white, fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  SizedBox(height: 4),
-                  Text('Les meilleurs titres du moment',
-                    style: TextStyle(color: Colors.white70, fontSize: 13)),
+                      style: AppTextStyles.title2
+                          .copyWith(color: Colors.white)),
+                  const SizedBox(height: 4),
+                  Text('The biggest tracks right now',
+                      style: AppTextStyles.subhead
+                          .copyWith(color: Colors.white70)),
                 ],
               ),
             ),
             Container(
-              width: 52, height: 52,
-              decoration: const BoxDecoration(
-                color: Colors.white24,
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.play_arrow_rounded,
@@ -311,6 +247,32 @@ class _TopBanner extends StatelessWidget {
   }
 }
 
+// ── Section Label ─────────────────────────────────────────────────────────────
+
+class _SectionLabel extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  const _SectionLabel({required this.title, required this.subtitle});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding:
+          const EdgeInsets.symmetric(horizontal: AppSpacing.screenHPad),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: AppTextStyles.sectionHeader),
+          const SizedBox(height: 2),
+          Text(subtitle, style: AppTextStyles.subhead),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Chart Chip ────────────────────────────────────────────────────────────────
+
 class _ChartChip extends StatelessWidget {
   final _Chart chart;
   final VoidCallback onTap;
@@ -321,27 +283,26 @@ class _ChartChip extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 140,
-        margin: const EdgeInsets.only(right: 12),
+        width: 148,
         decoration: BoxDecoration(
-          color: const Color(0xFF1C1C1E),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white12),
+          color: AppColors.surfaceElevated,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          border: Border.all(color: AppColors.borderDefault, width: 0.5),
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        padding: const EdgeInsets.fromLTRB(
+            AppSpacing.md, AppSpacing.sm, AppSpacing.md, AppSpacing.sm),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Text(chart.emoji, style: const TextStyle(fontSize: 22)),
-            const SizedBox(height: 4),
-            Text(chart.label,
+            const SizedBox(height: 6),
+            Text(
+              chart.label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Colors.white, fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
+              style: AppTextStyles.calloutMedium,
             ),
           ],
         ),
@@ -350,49 +311,154 @@ class _ChartChip extends StatelessWidget {
   }
 }
 
-class _GenreCard extends StatelessWidget {
-  final _Genre genre;
-  final VoidCallback onTap;
-  const _GenreCard({required this.genre, required this.onTap});
+// ── Mood Grid ─────────────────────────────────────────────────────────────────
+
+class _MoodGrid extends StatelessWidget {
+  final List<_Mood> moods;
+  final void Function(_Mood) onTap;
+  const _MoodGrid({required this.moods, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: genre.color.withOpacity(0.15), // CORRIGÉ ICI
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: genre.color.withOpacity(0.35)), // CORRIGÉ ICI
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        child: Row(
-          children: [
-            Container(
-              width: 36, height: 36,
-              decoration: BoxDecoration(
-                color: genre.color.withOpacity(0.2), // CORRIGÉ ICI
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(genre.icon, color: genre.color, size: 20),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(genre.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: genre.color,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13,
-                ),
-              ),
-            ),
-            Icon(Icons.chevron_right,
-                color: genre.color.withOpacity(0.6), size: 18), // CORRIGÉ ICI
-          ],
-        ),
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount:  2,
+        crossAxisSpacing: AppSpacing.sm,
+        mainAxisSpacing:  AppSpacing.sm,
+        childAspectRatio: 3.0,
       ),
+      itemCount: moods.length,
+      itemBuilder: (_, i) {
+        final m = moods[i];
+        return GestureDetector(
+          onTap: () => onTap(m),
+          child: Container(
+            decoration: BoxDecoration(
+              color: m.color.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+              border: Border.all(
+                  color: m.color.withOpacity(0.25), width: 0.5),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+            child: Row(
+              children: [
+                Text(m.emoji,
+                    style: const TextStyle(fontSize: 18)),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    m.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.calloutMedium
+                        .copyWith(color: m.color),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ── Genre Grid ────────────────────────────────────────────────────────────────
+
+class _GenreGrid extends StatelessWidget {
+  final List<_Genre> genres;
+  final void Function(_Genre) onTap;
+  const _GenreGrid({required this.genres, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount:  2,
+        crossAxisSpacing: AppSpacing.sm,
+        mainAxisSpacing:  AppSpacing.sm,
+        childAspectRatio: 2.2,
+      ),
+      itemCount: genres.length,
+      itemBuilder: (_, i) {
+        final g = genres[i];
+        return GestureDetector(
+          onTap: () => onTap(g),
+          child: Container(
+            decoration: BoxDecoration(
+              color: g.color.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+              border: Border.all(
+                  color: g.color.withOpacity(0.3), width: 0.5),
+            ),
+            padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+            child: Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: g.color.withOpacity(0.18),
+                    borderRadius:
+                        BorderRadius.circular(AppSpacing.radiusSm),
+                  ),
+                  child: Icon(g.icon, color: g.color, size: 20),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    g.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.calloutBold
+                        .copyWith(color: g.color),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ── Artist Pills ──────────────────────────────────────────────────────────────
+
+class _ArtistPills extends StatelessWidget {
+  final List<String> artists;
+  final void Function(String) onTap;
+  const _ArtistPills({required this.artists, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.sm,
+      children: artists
+          .map(
+            (a) => GestureDetector(
+              onTap: () => onTap(a),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md, vertical: AppSpacing.sm + 2),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceElevated,
+                  borderRadius:
+                      BorderRadius.circular(AppSpacing.radiusPill),
+                  border: Border.all(
+                      color: AppColors.borderDefault, width: 0.5),
+                ),
+                child: Text(a, style: AppTextStyles.calloutMedium),
+              ),
+            ),
+          )
+          .toList(),
     );
   }
 }

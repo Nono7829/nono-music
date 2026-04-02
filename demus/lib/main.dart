@@ -1,116 +1,104 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:just_audio_background/just_audio_background.dart'; // AJOUTER CETTE LIGNE
 
+import 'core/theme/app_theme.dart';
+import 'services/audio_service_initializer.dart';
 import 'services/music_provider.dart';
 import 'services/supabase_service.dart';
 import 'services/auth_service.dart';
 import 'screens/auth_screen.dart';
 import 'screens/main_navigation.dart';
 
-final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
+final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
+    GlobalKey<ScaffoldMessengerState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // ✅ INITIALISATION OBLIGATOIRE POUR ÉVITER LES CRASHS EN ARRIÈRE-PLAN
-  await JustAudioBackground.init(
-    androidNotificationChannelId: 'com.nonomusic.channel.audio',
-    androidNotificationChannelName: 'Nono Music',
-    androidNotificationOngoing: true,
-  );
-  
+
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarBrightness: Brightness.dark,
+    statusBarIconBrightness: Brightness.light,
+    systemNavigationBarColor: Colors.black,
+    systemNavigationBarIconBrightness: Brightness.light,
+  ));
+
   await SupabaseService.initialize();
-  runApp(const MyApp());
+
+  // ── Critical: audio service initialized ONCE, before runApp ──────────────
+  await AudioServiceInitializer.ensureInitialized();
+
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider<MusicProvider>(create: (_) => MusicProvider()),
+      ],
+      child: const NonoMusicApp(),
+    ),
+  );
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class NonoMusicApp extends StatelessWidget {
+  const NonoMusicApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => MusicProvider()),
-      ],
-      child: MaterialApp(
-        title: 'Nono Music',
-        debugShowCheckedModeBanner: false,
-        scaffoldMessengerKey: scaffoldMessengerKey,
-        theme: ThemeData(
-          brightness: Brightness.dark,
-          scaffoldBackgroundColor: const Color(0xFF0A0A0A),
-          primaryColor: const Color(0xFFFF2D55),
-          colorScheme: const ColorScheme.dark(
-            primary: Color(0xFFFF2D55),
-            secondary: Color(0xFF30D158),
-          ),
-          fontFamily: 'SF Pro',
-          useMaterial3: true,
-        ),
-        home: const AuthWrapper(),
-      ),
+    return MaterialApp(
+      title: 'Nono Music',
+      debugShowCheckedModeBanner: false,
+      scaffoldMessengerKey: scaffoldMessengerKey,
+      theme: AppTheme.dark,
+      home: const _AuthWrapper(),
     );
   }
 }
 
-class AuthWrapper extends StatefulWidget {
-  const AuthWrapper({super.key});
+class _AuthWrapper extends StatefulWidget {
+  const _AuthWrapper();
 
   @override
-  State<AuthWrapper> createState() => _AuthWrapperState();
+  State<_AuthWrapper> createState() => _AuthWrapperState();
 }
 
-class _AuthWrapperState extends State<AuthWrapper> {
-  final AuthService _authService = AuthService();
+class _AuthWrapperState extends State<_AuthWrapper> {
+  final _auth = AuthService();
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _checkAuthStatus();
+    _bootstrap();
   }
 
-  Future<void> _checkAuthStatus() async {
-    // Essayer de se connecter silencieusement
-    await _authService.signInSilently();
-    
-    // Charger les données depuis Supabase si connecté
-    if (_authService.isAuthenticated) {
+  Future<void> _bootstrap() async {
+    await _auth.signInSilently();
+    if (!mounted) return;
+    if (_auth.isAuthenticated) {
       await context.read<MusicProvider>().loadFromSupabase();
     }
-    
-    setState(() => _isLoading = false);
+    if (mounted) setState(() => _isLoading = false);
   }
 
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Scaffold(
+        backgroundColor: Color(0xFF000000),
         body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(color: Color(0xFFFF2D55)),
-              SizedBox(height: 16),
-              Text('Chargement...', style: TextStyle(color: Colors.grey)),
-            ],
+          child: CircularProgressIndicator(
+            color: Color(0xFFFF375F),
+            strokeWidth: 2,
           ),
         ),
       );
     }
 
     return StreamBuilder(
-      stream: _authService.authStateChanges,
-      builder: (context, snapshot) {
-        final isAuth = _authService.isAuthenticated;
-        
-        if (isAuth) {
-          return const MainNavigation();
-        } else {
-          return const AuthScreen();
-        }
-      },
+      stream: _auth.authStateChanges,
+      builder: (_, __) => _auth.isAuthenticated
+          ? const MainNavigation()
+          : const AuthScreen(),
     );
   }
 }

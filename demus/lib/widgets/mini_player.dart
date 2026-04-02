@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+import '../core/theme/app_colors.dart';
+import '../core/theme/app_text_styles.dart';
+import '../core/constants/app_spacing.dart';
 import '../services/music_provider.dart';
-import 'full_screen_player.dart';
 import 'song_options_menu.dart';
 
 class MiniPlayer extends StatelessWidget {
@@ -9,95 +12,126 @@ class MiniPlayer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<MusicProvider>();
-    final song     = provider.currentSong;
+    final song = context.select((MusicProvider p) => p.currentSong);
     if (song == null) return const SizedBox.shrink();
 
-    return GestureDetector(
-      onTap: () => showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (_) => const FullScreenPlayer(),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        child: Container(
-          height: 64,
-          decoration: BoxDecoration(
-            color: const Color(0xFF2C2C2E),
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.5),
-                blurRadius: 20,
-                offset: const Offset(0, 4),
+    final isPlaying      = context.select((MusicProvider p) => p.isPlaying);
+    final isLoading      = context.select((MusicProvider p) => p.isAudioLoading);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+      child: Container(
+        height: AppSpacing.miniPlayerH,
+        decoration: BoxDecoration(
+          color: AppColors.surfaceElevated,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+          border: Border.all(color: AppColors.borderSubtle, width: 0.5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.6),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            const SizedBox(width: AppSpacing.sm),
+
+            // Album art
+            ClipRRect(
+              borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+              child: song.coverUrl.isNotEmpty
+                  ? Image.network(
+                      song.coverUrl,
+                      width: 48,
+                      height: 48,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => _placeholder(),
+                    )
+                  : _placeholder(),
+            ),
+            const SizedBox(width: AppSpacing.sm + 4),
+
+            // Title + artist
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    song.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.calloutBold,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    song.artist,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.caption1,
+                  ),
+                ],
               ),
-            ],
-          ),
-          child: Row(
-            children: [
-              const SizedBox(width: 8),
-              // Pochette
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: song.coverUrl.isNotEmpty
-                    ? Image.network(song.coverUrl,
-                        width: 46, height: 46, fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => _thumb())
-                    : _thumb(),
-              ),
-              const SizedBox(width: 12),
-              // Titre + artiste
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(song.title,
-                      maxLines: 1, overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                    Text(song.artist,
-                      maxLines: 1, overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                  ],
-                ),
-              ),
-              // Play / Pause / Loading
-              SizedBox(
-                width: 40, height: 40,
-                child: provider.isAudioLoading
-                    ? const Padding(
-                        padding: EdgeInsets.all(10),
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Color(0xFFFF2D55)))
-                    : IconButton(
-                        icon: Icon(
-                          provider.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                          color: Colors.white, size: 28),
-                        onPressed: provider.togglePlayPause,
-                        padding: EdgeInsets.zero,
+            ),
+
+            // Play / Pause / Loading
+            SizedBox(
+              width: 40,
+              height: 40,
+              child: isLoading
+                  ? const Padding(
+                      padding: EdgeInsets.all(10),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.accent,
                       ),
-              ),
-              // Suivant
-              IconButton(
-                icon: const Icon(Icons.skip_next_rounded, color: Colors.white, size: 26),
-                onPressed: provider.isAudioLoading ? null : provider.playNext,
-              ),
-              // Options
-              IconButton(
-                icon: const Icon(Icons.more_vert_rounded, color: Colors.white60, size: 22),
-                onPressed: () => showSongOptionsMenu(context, song),
-              ),
-              const SizedBox(width: 4),
-            ],
-          ),
+                    )
+                  : IconButton(
+                      icon: Icon(
+                        isPlaying
+                            ? Icons.pause_rounded
+                            : Icons.play_arrow_rounded,
+                        color: AppColors.textPrimary,
+                        size: 28,
+                      ),
+                      onPressed:
+                          context.read<MusicProvider>().togglePlayPause,
+                      padding: EdgeInsets.zero,
+                    ),
+            ),
+
+            // Skip next
+            IconButton(
+              icon: const Icon(Icons.skip_next_rounded,
+                  color: AppColors.textPrimary, size: 26),
+              onPressed: isLoading
+                  ? null
+                  : context.read<MusicProvider>().playNext,
+              padding: EdgeInsets.zero,
+            ),
+
+            // Options
+            IconButton(
+              icon: const Icon(Icons.more_vert_rounded,
+                  color: AppColors.textSecondary, size: 20),
+              onPressed: () => showSongOptionsMenu(context, song),
+              padding: EdgeInsets.zero,
+            ),
+
+            const SizedBox(width: AppSpacing.xs),
+          ],
         ),
       ),
     );
   }
 
-  Widget _thumb() => Container(
-      width: 46, height: 46, color: const Color(0xFF1C1C1E),
-      child: const Icon(Icons.music_note, color: Colors.white30));
+  Widget _placeholder() => Container(
+        width: 48,
+        height: 48,
+        color: AppColors.surfaceHighlight,
+        child: const Icon(Icons.music_note,
+            color: AppColors.textTertiary, size: 22),
+      );
 }

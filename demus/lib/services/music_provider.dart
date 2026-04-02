@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:dio/dio.dart';
@@ -7,7 +9,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
+import 'package:audio_service/audio_service.dart';
 import 'package:rxdart/rxdart.dart';
+
 import '../models/song.dart';
 import 'supabase_service.dart';
 import 'auth_service.dart';
@@ -16,48 +20,51 @@ class PositionData {
   final Duration position;
   final Duration bufferedPosition;
   final Duration duration;
-  PositionData(this.position, this.bufferedPosition, this.duration);
+  const PositionData(this.position, this.bufferedPosition, this.duration);
 }
 
 class MusicProvider with ChangeNotifier {
-  static const String _baseUrl = 'http://localhost:3000';
+   static const String _baseUrl = String.fromEnvironment(
+      'BACKEND_URL',
+      defaultValue: 'http://localhost:3000',
+    );
 
-  // Services
   final SupabaseService _supabase = SupabaseService();
   final AuthService _auth = AuthService();
 
-  // ── Clés SharedPreferences (backup local) ───────────────────────────────
   static const _kPlaylists      = 'nono_playlists';
   static const _kFavorites      = 'nono_favorites';
   static const _kRecentlyPlayed = 'nono_recently_played';
   static const _kDownloads      = 'downloaded_songs';
 
-  // ── Recherche ──────────────────────────────────────────────────────────
+  // ── Search ────────────────────────────────────────────────────────────────
   List<Song> _songs       = [];
   bool _isLoading         = false;
   String? _errorMessage;
+  Timer? _searchDebounce;
 
-  // ── Lecture ────────────────────────────────────────────────────────────
+  // ── Playback ──────────────────────────────────────────────────────────────
   Song?      _currentSong;
   List<Song> _queue        = [];
   int        _currentIndex = -1;
   int        _loadId       = 0;
   bool       _isPlaying    = false;
   bool       _isAudioLoading = false;
-  bool       _autoPlayNext = true; // Lecture automatique activée par défaut
+  bool       _autoPlayNext = true;
 
-  // ── Bibliothèque (persistées localement + cloud) ───────────────────────
-  List<Song>                   _favoriteSongs  = [];
-  List<Song>                   _recentlyPlayed = [];
-  List<Map<String, dynamic>>   _playlists      = [];
+  // ── Library ───────────────────────────────────────────────────────────────
+  List<Song>                 _favoriteSongs  = [];
+  List<Song>                 _recentlyPlayed = [];
+  List<Map<String, dynamic>> _playlists      = [];
 
-  // ── Téléchargements ────────────────────────────────────────────────────
-  List<Song>           _downloadedSongs   = [];
+  // ── Downloads ─────────────────────────────────────────────────────────────
+  List<Song>            _downloadedSongs   = [];
   final Map<String, double> _downloadProgress = {};
 
+  // ── Audio player (single instance, lives for app lifetime) ────────────────
   final AudioPlayer _player = AudioPlayer();
 
-  // ── Stream position ────────────────────────────────────────────────────
+  // ── Position stream ───────────────────────────────────────────────────────
   Stream<PositionData> get positionDataStream =>
       Rx.combineLatest3<Duration, Duration, Duration?, PositionData>(
         _player.positionStream,
@@ -69,25 +76,25 @@ class MusicProvider with ChangeNotifier {
   AudioPlayer get audioPlayer => _player;
   bool get autoPlayNext => _autoPlayNext;
 
-  // ── Getters ────────────────────────────────────────────────────────────
-  List<Song>  get songs           => _songs;
-  bool        get isLoading       => _isLoading;
-  String?     get errorMessage    => _errorMessage;
-  Song?       get currentSong     => _currentSong;
-  bool        get isPlaying       => _isPlaying;
-  bool        get isAudioLoading  => _isAudioLoading;
-  List<Song>  get favoriteSongs   => _favoriteSongs;
-  List<Song>  get recentlyPlayed  => _recentlyPlayed;
-  List<Song>  get downloadedSongs => _downloadedSongs;
-  Map<String, double> get downloadProgress => _downloadProgress;
-  List<Map<String, dynamic>> get playlists => _playlists;
+  // ── Getters ───────────────────────────────────────────────────────────────
+  List<Song>  get songs            => List.unmodifiable(_songs);
+  bool        get isLoading        => _isLoading;
+  String?     get errorMessage     => _errorMessage;
+  Song?       get currentSong      => _currentSong;
+  bool        get isPlaying        => _isPlaying;
+  bool        get isAudioLoading   => _isAudioLoading;
+  List<Song>  get favoriteSongs    => List.unmodifiable(_favoriteSongs);
+  List<Song>  get recentlyPlayed   => List.unmodifiable(_recentlyPlayed);
+  List<Song>  get downloadedSongs  => List.unmodifiable(_downloadedSongs);
+  Map<String, double> get downloadProgress => Map.unmodifiable(_downloadProgress);
+  List<Map<String, dynamic>> get playlists => List.unmodifiable(_playlists);
 
-  // ── Constructeur ───────────────────────────────────────────────────────
+  // ── Constructor ───────────────────────────────────────────────────────────
   MusicProvider() {
-    _initializeAudioService();
+    // Note: JustAudioBackground.init() is called in main() via
+    // AudioServiceInitializer — never here.
     _loadAllData();
 
-    // Lecture automatique du suivant quand une chanson se termine
     _player.processingStateStream.listen((state) {
       if (state == ProcessingState.completed && _autoPlayNext) {
         _isPlaying = false;
@@ -104,25 +111,12 @@ class MusicProvider with ChangeNotifier {
     });
   }
 
-  Future<void> _initializeAudioService() async {
-    try {
-      await JustAudioBackground.init(
-        androidNotificationChannelId: 'com.nonomusic.app.channel.audio',
-        androidNotificationChannelName: 'Nono Music',
-        androidNotificationOngoing: true,
-        androidStopForegroundOnPause: true,
-      );
-    } catch (e) {
-      debugPrint('[AUDIO_SERVICE] Erreur init : $e');
-    }
-  }
-
   void toggleAutoPlay() {
     _autoPlayNext = !_autoPlayNext;
     notifyListeners();
   }
 
-  // ── Sérialisation Song ─────────────────────────────────────────────────
+  // ── Serialization ─────────────────────────────────────────────────────────
   static Map<String, dynamic> _songToJson(Song s) => {
     'id': s.id, 'title': s.title, 'artist': s.artist,
     'duration': s.duration, 'coverUrl': s.coverUrl,
@@ -136,43 +130,30 @@ class MusicProvider with ChangeNotifier {
     coverUrl: (j['coverUrl'] as String?) ?? '',
   );
 
-  // ── Chargement depuis Supabase (prioritaire) ──────────────────────────
+  // ── Cloud sync ────────────────────────────────────────────────────────────
   Future<void> loadFromSupabase() async {
     if (!_auth.isAuthenticated) {
-      await _loadAllData(); // Fallback local
+      await _loadAllData();
       return;
     }
-
     try {
-      debugPrint('[SYNC] Chargement depuis Supabase...');
-      
-      // Charger les favoris
-      _favoriteSongs = await _supabase.getFavorites();
-      
-      // Charger les playlists
-      final cloudPlaylists = await _supabase.getPlaylists();
-      _playlists = cloudPlaylists;
-      
-      // Charger l'historique
+      debugPrint('[SYNC] Loading from Supabase…');
+      _favoriteSongs  = await _supabase.getFavorites();
+      _playlists      = await _supabase.getPlaylists();
       _recentlyPlayed = await _supabase.getRecentlyPlayed();
-      
-      // Charger les téléchargements (local uniquement)
       await _loadDownloads();
-      
-      debugPrint('[SYNC] ✅ ${_favoriteSongs.length} favoris, ${_playlists.length} playlists');
+      debugPrint('[SYNC] ✅ ${_favoriteSongs.length} favorites, ${_playlists.length} playlists');
       notifyListeners();
-      
     } catch (e) {
-      debugPrint('[SYNC] ❌ Erreur : $e');
-      await _loadAllData(); // Fallback local
+      debugPrint('[SYNC] ❌ $e');
+      await _loadAllData();
     }
   }
 
-  // ── Chargement local (backup) ──────────────────────────────────────────
+  // ── Local persistence ─────────────────────────────────────────────────────
   Future<void> _loadAllData() async {
     final prefs = await SharedPreferences.getInstance();
     try {
-      // Favoris
       final favRaw = prefs.getString(_kFavorites);
       if (favRaw != null) {
         _favoriteSongs = (jsonDecode(favRaw) as List)
@@ -180,7 +161,6 @@ class MusicProvider with ChangeNotifier {
             .toList();
       }
 
-      // Récemment joués
       final recRaw = prefs.getString(_kRecentlyPlayed);
       if (recRaw != null) {
         _recentlyPlayed = (jsonDecode(recRaw) as List)
@@ -188,7 +168,6 @@ class MusicProvider with ChangeNotifier {
             .toList();
       }
 
-      // Playlists
       final plRaw = prefs.getString(_kPlaylists);
       if (plRaw != null) {
         final decoded = jsonDecode(plRaw) as List;
@@ -196,21 +175,19 @@ class MusicProvider with ChangeNotifier {
           final songs = (pl['songs'] as List? ?? [])
               .map((s) => _songFromJson(s as Map<String, dynamic>))
               .toList();
-          return {
-            'id':    pl['id']   as String,
-            'name':  pl['name'] as String,
+          return <String, dynamic>{
+            'id':       pl['id']   as String,
+            'name':     pl['name'] as String,
             'coverUrl': pl['coverUrl'] as String?,
-            'songs': songs,
+            'songs':    songs,
           };
-        }).cast<Map<String, dynamic>>().toList();
+        }).toList();
       }
 
-      // Téléchargements
       await _loadDownloads();
-
       notifyListeners();
     } catch (e) {
-      debugPrint('[PREFS] Erreur chargement : $e');
+      debugPrint('[PREFS] Load error: $e');
     }
   }
 
@@ -224,19 +201,14 @@ class MusicProvider with ChangeNotifier {
     }
   }
 
-  // ── Sauvegarde avec sync cloud ─────────────────────────────────────────
   Future<void> _saveFavorites() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kFavorites,
         jsonEncode(_favoriteSongs.map(_songToJson).toList()));
-    
-    // Sync cloud
     if (_auth.isAuthenticated) {
-      try {
-        await _supabase.syncFavorites(_favoriteSongs);
-      } catch (e) {
-        debugPrint('[SYNC] Erreur sync favoris : $e');
-      }
+      unawaited(_supabase.syncFavorites(_favoriteSongs).catchError(
+            (e) => debugPrint('[SYNC] favorites error: $e'),
+          ));
     }
   }
 
@@ -244,34 +216,26 @@ class MusicProvider with ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kRecentlyPlayed,
         jsonEncode(_recentlyPlayed.map(_songToJson).toList()));
-    
-    // Sync cloud
     if (_auth.isAuthenticated) {
-      try {
-        await _supabase.syncRecentlyPlayed(_recentlyPlayed);
-      } catch (e) {
-        debugPrint('[SYNC] Erreur sync historique : $e');
-      }
+      unawaited(_supabase.syncRecentlyPlayed(_recentlyPlayed).catchError(
+            (e) => debugPrint('[SYNC] recently played error: $e'),
+          ));
     }
   }
 
   Future<void> _savePlaylists() async {
     final prefs = await SharedPreferences.getInstance();
     final data = _playlists.map((pl) => {
-      'id':    pl['id'],
-      'name':  pl['name'],
+      'id':       pl['id'],
+      'name':     pl['name'],
       'coverUrl': pl['coverUrl'],
-      'songs': (pl['songs'] as List<Song>).map(_songToJson).toList(),
+      'songs':    (pl['songs'] as List<Song>).map(_songToJson).toList(),
     }).toList();
     await prefs.setString(_kPlaylists, jsonEncode(data));
-    
-    // Sync cloud
     if (_auth.isAuthenticated) {
-      try {
-        await _supabase.syncPlaylists(_playlists);
-      } catch (e) {
-        debugPrint('[SYNC] Erreur sync playlists : $e');
-      }
+      unawaited(_supabase.syncPlaylists(_playlists).catchError(
+            (e) => debugPrint('[SYNC] playlists error: $e'),
+          ));
     }
   }
 
@@ -281,9 +245,25 @@ class MusicProvider with ChangeNotifier {
         jsonEncode(_downloadedSongs.map(_songToJson).toList()));
   }
 
-  // ── Recherche ──────────────────────────────────────────────────────────
+  // ── Search (debounced) ────────────────────────────────────────────────────
+
+  /// Call from the TextField's onChanged. Debounces 450 ms.
+  void searchDebounced(String query) {
+    _searchDebounce?.cancel();
+    if (query.trim().isEmpty) {
+      clearSearch();
+      return;
+    }
+    _searchDebounce = Timer(
+      const Duration(milliseconds: 450),
+      () => searchYouTube(query),
+    );
+  }
+
   Future<void> searchYouTube(String query) async {
-    if (query.trim().isEmpty) return;
+    final q = query.trim();
+    if (q.isEmpty) return;
+
     _isLoading    = true;
     _errorMessage = null;
     _songs        = [];
@@ -291,26 +271,28 @@ class MusicProvider with ChangeNotifier {
 
     try {
       final uri = Uri.parse('$_baseUrl/search')
-          .replace(queryParameters: {'q': query.trim()});
+          .replace(queryParameters: {'q': q});
       final resp = await http.get(uri).timeout(const Duration(seconds: 30));
 
       if (resp.statusCode != 200) {
-        _errorMessage = 'Erreur serveur (${resp.statusCode})';
+        _errorMessage = 'Server error (${resp.statusCode})';
       } else {
-        final body = jsonDecode(resp.body);
-        if (body is Map<String, dynamic> && body['results'] is List) {
-          for (final item in body['results'] as List) {
+        final body = jsonDecode(resp.body) as Map<String, dynamic>?;
+        if (body?['results'] is List) {
+          for (final item in body!['results'] as List) {
             if (item is Map<String, dynamic>) {
               try { _songs.add(Song.fromJson(item)); } catch (_) {}
             }
           }
         }
-        debugPrint('[FLUTTER] ${_songs.length} résultats');
+        debugPrint('[SEARCH] ${_songs.length} results for "$q"');
       }
     } on http.ClientException {
-      _errorMessage = 'Serveur inaccessible.\nLancez : cd demus-backend && node server.js';
+      _errorMessage = 'Server unreachable.\nRun: cd demus-backend && node server.js';
+    } on TimeoutException {
+      _errorMessage = 'Request timed out. Check backend connectivity.';
     } catch (e) {
-      _errorMessage = 'Erreur : $e';
+      _errorMessage = 'Error: $e';
     }
 
     _isLoading = false;
@@ -318,29 +300,30 @@ class MusicProvider with ChangeNotifier {
   }
 
   void clearSearch() {
+    _searchDebounce?.cancel();
     _songs        = [];
     _errorMessage = null;
     notifyListeners();
   }
 
-  // ── LECTURE avec notification arrière-plan ─────────────────────────────
+  // ── Playback ──────────────────────────────────────────────────────────────
+
   Future<void> playSong(Song song, {List<Song>? queue}) async {
     final myId = ++_loadId;
 
     _currentSong = song;
     final sourceQueue = queue ?? (_songs.isNotEmpty ? _songs : [song]);
-    _queue = List.from(sourceQueue);
+    _queue        = List.from(sourceQueue);
     _currentIndex = _queue.indexWhere((s) => s.id == song.id);
     if (_currentIndex == -1) { _queue = [song]; _currentIndex = 0; }
 
     _isPlaying      = true;
     _isAudioLoading = true;
 
-    // Historique
     _recentlyPlayed.removeWhere((s) => s.id == song.id);
     _recentlyPlayed.insert(0, song);
     if (_recentlyPlayed.length > 30) _recentlyPlayed.removeLast();
-    _saveRecentlyPlayed();
+    unawaited(_saveRecentlyPlayed());
 
     notifyListeners();
 
@@ -348,29 +331,19 @@ class MusicProvider with ChangeNotifier {
       await _player.stop();
       if (myId != _loadId) return;
 
-      final audioSource = await _resolveSource(song);
+      final audioPath = await _resolveSource(song);
       if (myId != _loadId) return;
 
-      // Créer la source audio avec métadonnées pour notification
-      final source = audioSource.startsWith('http')
-          ? AudioSource.uri(
-              Uri.parse(audioSource),
-              tag: MediaItem(
-                id: song.id,
-                title: song.title,
-                artist: song.artist,
-                artUri: Uri.parse(song.coverUrl),
-              ),
-            )
-          : AudioSource.file(
-              audioSource,
-              tag: MediaItem(
-                id: song.id,
-                title: song.title,
-                artist: song.artist,
-                artUri: Uri.parse(song.coverUrl),
-              ),
-            );
+      final tag = MediaItem(
+        id:     song.id,
+        title:  song.title,
+        artist: song.artist,
+        artUri: song.coverUrl.isNotEmpty ? Uri.parse(song.coverUrl) : null,
+      );
+
+      final source = audioPath.startsWith('http')
+          ? AudioSource.uri(Uri.parse(audioPath), tag: tag)
+          : AudioSource.file(audioPath, tag: tag);
 
       await _player.setAudioSource(source);
       if (myId != _loadId) return;
@@ -378,9 +351,8 @@ class MusicProvider with ChangeNotifier {
       _isAudioLoading = false;
       notifyListeners();
       await _player.play();
-
     } catch (e) {
-      debugPrint('[FLUTTER] playSong error: $e');
+      debugPrint('[AUDIO] playSong error: $e');
       if (myId == _loadId) {
         _isPlaying      = false;
         _isAudioLoading = false;
@@ -396,15 +368,17 @@ class MusicProvider with ChangeNotifier {
       if (await local.exists()) {
         final size = await local.length();
         if (size > 50000) return local.path;
+        // Corrupt file — remove it.
         await local.delete();
         _downloadedSongs.removeWhere((s) => s.id == song.id);
-        _saveDownloads();
+        unawaited(_saveDownloads());
       }
     } catch (_) {}
     return '$_baseUrl/proxy/${song.id}';
   }
 
-  // ── Contrôles ──────────────────────────────────────────────────────────
+  // ── Controls ──────────────────────────────────────────────────────────────
+
   void togglePlayPause() {
     if (_isAudioLoading) return;
     if (_isPlaying) {
@@ -429,7 +403,6 @@ class MusicProvider with ChangeNotifier {
     if (_currentIndex >= 0 && _currentIndex < _queue.length - 1) {
       playSong(_queue[_currentIndex + 1], queue: _queue);
     } else {
-      // Fin de la file d'attente
       _isPlaying      = false;
       _isAudioLoading = false;
       notifyListeners();
@@ -446,71 +419,72 @@ class MusicProvider with ChangeNotifier {
   }
 
   void addToQueue(Song song) {
-    if (!_queue.any((s) => s.id == song.id)) {
-      _queue.add(song);
-      notifyListeners();
-    }
+    if (_queue.any((s) => s.id == song.id)) return;
+    _queue.add(song);
+    notifyListeners();
   }
 
-  // ── Favoris (persistés + cloud) ────────────────────────────────────────
+  // ── Favorites ─────────────────────────────────────────────────────────────
+
   void toggleFavorite(Song song) {
     if (_favoriteSongs.any((s) => s.id == song.id)) {
       _favoriteSongs.removeWhere((s) => s.id == song.id);
     } else {
       _favoriteSongs.add(song);
     }
-    _saveFavorites();
+    unawaited(_saveFavorites());
     notifyListeners();
   }
 
   bool isFavorite(Song song) => _favoriteSongs.any((s) => s.id == song.id);
 
-  // ── Playlists (persistées + cloud) ─────────────────────────────────────
+  // ── Playlists ─────────────────────────────────────────────────────────────
+
   void createPlaylist(String name, {String? coverUrl}) {
     _playlists.add({
-      'id':    DateTime.now().millisecondsSinceEpoch.toString(),
-      'name':  name,
+      'id':       DateTime.now().millisecondsSinceEpoch.toString(),
+      'name':     name,
       'coverUrl': coverUrl,
-      'songs': <Song>[],
+      'songs':    <Song>[],
     });
-    _savePlaylists();
+    unawaited(_savePlaylists());
     notifyListeners();
   }
 
   void deletePlaylist(String playlistId) {
     _playlists.removeWhere((p) => p['id'] == playlistId);
-    _savePlaylists();
+    unawaited(_savePlaylists());
     notifyListeners();
   }
 
   void renamePlaylist(String playlistId, String newName) {
     final pl = _playlists.firstWhere(
-      (p) => p['id'] == playlistId, orElse: () => {});
+        (p) => p['id'] == playlistId, orElse: () => {});
     if (pl.isNotEmpty) {
       pl['name'] = newName;
-      _savePlaylists();
+      unawaited(_savePlaylists());
       notifyListeners();
     }
   }
 
   void updatePlaylistCover(String playlistId, String coverUrl) {
     final pl = _playlists.firstWhere(
-      (p) => p['id'] == playlistId, orElse: () => {});
+        (p) => p['id'] == playlistId, orElse: () => {});
     if (pl.isNotEmpty) {
       pl['coverUrl'] = coverUrl;
-      _savePlaylists();
+      unawaited(_savePlaylists());
       notifyListeners();
     }
   }
 
   void addSongToPlaylist(String playlistId, Song song) {
     final pl = _playlists.firstWhere(
-      (p) => p['id'] == playlistId, orElse: () => {});
+        (p) => p['id'] == playlistId, orElse: () => {});
     if (pl.isNotEmpty) {
       final songs = pl['songs'] as List<Song>;
       if (!songs.any((s) => s.id == song.id)) {
         songs.add(song);
-        _savePlaylists();
+        unawaited(_savePlaylists());
         notifyListeners();
       }
     }
@@ -518,50 +492,45 @@ class MusicProvider with ChangeNotifier {
 
   void removeSongFromPlaylist(String playlistId, String songId) {
     final pl = _playlists.firstWhere(
-      (p) => p['id'] == playlistId, orElse: () => {});
+        (p) => p['id'] == playlistId, orElse: () => {});
     if (pl.isNotEmpty) {
       (pl['songs'] as List<Song>).removeWhere((s) => s.id == songId);
-      _savePlaylists();
+      unawaited(_savePlaylists());
       notifyListeners();
     }
   }
 
   Future<List<Song>> getPlaylistSongs(String playlistId) async {
     final pl = _playlists.firstWhere(
-      (p) => p['id'] == playlistId, orElse: () => {});
+        (p) => p['id'] == playlistId, orElse: () => {});
     if (pl.isEmpty) return [];
     return List<Song>.from(pl['songs'] as List<Song>);
   }
 
-  // Télécharger toute une playlist
-  Future<void> downloadPlaylist(String playlistId, {VoidCallback? onComplete}) async {
+  bool isPlaylistFullyDownloaded(String playlistId) {
+    final pl = _playlists.firstWhere(
+        (p) => p['id'] == playlistId, orElse: () => {});
+    if (pl.isEmpty) return false;
+    final songs = pl['songs'] as List<Song>;
+    if (songs.isEmpty) return false;
+    return songs.every(isDownloaded);
+  }
+
+  Future<void> downloadPlaylist(String playlistId,
+      {VoidCallback? onComplete}) async {
     final songs = await getPlaylistSongs(playlistId);
     int completed = 0;
-    
     for (final song in songs) {
       if (!isDownloaded(song)) {
         await downloadSong(song);
         completed++;
       }
     }
-    
-    if (completed > 0) {
-      onComplete?.call();
-    }
+    if (completed > 0) onComplete?.call();
   }
 
-  bool isPlaylistFullyDownloaded(String playlistId) {
-    final pl = _playlists.firstWhere(
-      (p) => p['id'] == playlistId, orElse: () => {});
-    if (pl.isEmpty) return false;
-    
-    final songs = pl['songs'] as List<Song>;
-    if (songs.isEmpty) return false;
-    
-    return songs.every((s) => isDownloaded(s));
-  }
+  // ── Downloads ─────────────────────────────────────────────────────────────
 
-  // ── Téléchargements ────────────────────────────────────────────────────
   bool isDownloaded(Song song) => _downloadedSongs.any((s) => s.id == song.id);
 
   Future<void> downloadSong(Song song, {VoidCallback? onComplete}) async {
@@ -582,7 +551,8 @@ class MusicProvider with ChangeNotifier {
           final dir      = await getApplicationDocumentsDirectory();
           final savePath = '${dir.path}/${song.id}.m4a';
           await Dio().download(
-            streamUrl, savePath,
+            streamUrl,
+            savePath,
             onReceiveProgress: (rec, tot) {
               if (tot > 0) {
                 _downloadProgress[song.id] = rec / tot;
@@ -599,7 +569,7 @@ class MusicProvider with ChangeNotifier {
         }
       }
     } catch (e) {
-      debugPrint('[FLUTTER] Download error: $e');
+      debugPrint('[DOWNLOAD] error: $e');
     }
 
     _downloadProgress.remove(song.id);
@@ -620,6 +590,7 @@ class MusicProvider with ChangeNotifier {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _player.dispose();
     super.dispose();
   }

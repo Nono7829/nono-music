@@ -1,22 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+import '../core/theme/app_colors.dart';
+import '../core/theme/app_text_styles.dart';
+import '../core/constants/app_spacing.dart';
 import '../services/music_provider.dart';
-import '../services/auth_service.dart';
 import '../widgets/mini_player.dart';
 import '../widgets/full_screen_player.dart';
 import 'home_screen.dart';
 import 'explore_screen.dart';
 import 'search_screen.dart';
 import 'library_screen.dart';
-import 'profile_screen.dart';
 
 class MainNavigation extends StatefulWidget {
   const MainNavigation({super.key});
 
-  // AJOUT : Permet aux autres écrans de trouver ce widget
-  static _MainNavigationState? of(BuildContext context) {
-    return context.findAncestorStateOfType<_MainNavigationState>();
-  }
+  static _MainNavigationState? of(BuildContext context) =>
+      context.findAncestorStateOfType<_MainNavigationState>();
 
   @override
   State<MainNavigation> createState() => _MainNavigationState();
@@ -24,27 +24,27 @@ class MainNavigation extends StatefulWidget {
 
 class _MainNavigationState extends State<MainNavigation> {
   int _currentIndex = 0;
-
-  // AJOUT : Contrôleur pour passer le texte à la recherche
   final TextEditingController _searchController = TextEditingController();
 
-  // MODIFICATION : "late final" au lieu de "const" pour pouvoir passer le contrôleur
-  late final List<Widget> _screens = [
-    const HomeScreen(),
-    const ExploreScreen(),
-    SearchScreen(externalController: _searchController), // AJOUT DU CONTRÔLEUR ICI
-    const LibraryScreen(),
-  ];
+  late final List<Widget> _screens;
 
-  // AJOUT : La méthode appelée par ExploreScreen
-  void goToSearch(String query) {
-    setState(() {
-      _currentIndex = 2; // Va sur l'onglet recherche
-    });
-    _searchController.text = query; // Remplis le texte
+  @override
+  void initState() {
+    super.initState();
+    _screens = [
+      const HomeScreen(),
+      const ExploreScreen(),
+      SearchScreen(externalController: _searchController),
+      const LibraryScreen(),
+    ];
   }
 
-  // AJOUT : Nettoyage du contrôleur
+  void goToSearch(String query) {
+    setState(() => _currentIndex = 2);
+    _searchController.text = query;
+    // Trigger the search immediately after nav (provider already called by ExploreScreen)
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -53,90 +53,82 @@ class _MainNavigationState extends State<MainNavigation> {
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<MusicProvider>();
-    final authService = AuthService();
+    final hasSong =
+        context.select((MusicProvider p) => p.currentSong != null);
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0A0A),
+      backgroundColor: AppColors.background,
       body: Stack(
         children: [
-          _screens[_currentIndex],
-
-          // Mini player flottant au-dessus de la nav bar
-          Positioned(
-            bottom: 65,
-            left: 0,
-            right: 0,
-            child: GestureDetector(
-              onTap: () {
-                if (provider.currentSong != null) {
-                  showModalBottomSheet(
-                    context: context,
-                    isScrollControlled: true,
-                    backgroundColor: Colors.transparent,
-                    builder: (_) => const FullScreenPlayer(),
-                  );
-                }
-              },
-              child: const MiniPlayer(),
-            ),
+          // ── Screen content ───────────────────────────────────────────────
+          IndexedStack(
+            index: _currentIndex,
+            children: _screens,
           ),
+
+          // ── Mini player (floats above nav bar) ───────────────────────────
+          if (hasSong)
+            Positioned(
+              bottom: AppSpacing.navBarHeight + AppSpacing.sm,
+              left: 0,
+              right: 0,
+              child: GestureDetector(
+                onTap: () => showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (_) => const FullScreenPlayer(),
+                ),
+                child: const MiniPlayer(),
+              ),
+            ),
         ],
       ),
-      bottomNavigationBar: _buildNavBar(authService),
+      bottomNavigationBar: _NavBar(
+        currentIndex: _currentIndex,
+        onTap: (i) => setState(() => _currentIndex = i),
+      ),
     );
   }
+}
 
-  Widget _buildNavBar(AuthService authService) {
+// ── Navigation Bar ────────────────────────────────────────────────────────────
+
+class _NavBar extends StatelessWidget {
+  final int currentIndex;
+  final void Function(int) onTap;
+  const _NavBar({required this.currentIndex, required this.onTap});
+
+  static const List<_NavItem> _items = [
+    _NavItem(icon: Icons.home_rounded,          label: 'Home'),
+    _NavItem(icon: Icons.grid_view_rounded,     label: 'Explore'),
+    _NavItem(icon: Icons.search_rounded,        label: 'Search'),
+    _NavItem(icon: Icons.library_music_rounded, label: 'Library'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF1C1C1E),
+      decoration: const BoxDecoration(
+        color: AppColors.navBackground,
         border: Border(
-          top: BorderSide(color: Colors.white.withOpacity(0.08), width: 0.5), // Remplacé withValues par withOpacity au cas où
+          top: BorderSide(color: AppColors.navBorder, width: 0.5),
         ),
       ),
       child: SafeArea(
         top: false,
         child: SizedBox(
-          height: 65,
+          height: AppSpacing.navBarHeight,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _NavItem(
-                icon: Icons.home_rounded,
-                label: 'Accueil',
-                selected: _currentIndex == 0,
-                onTap: () => setState(() => _currentIndex = 0),
+            children: List.generate(
+              _items.length,
+              (i) => _NavButton(
+                item: _items[i],
+                selected: currentIndex == i,
+                onTap: () => onTap(i),
               ),
-              _NavItem(
-                icon: Icons.grid_view_rounded,
-                label: 'Explorer',
-                selected: _currentIndex == 1,
-                onTap: () => setState(() => _currentIndex = 1),
-              ),
-              _NavItem(
-                icon: Icons.search_rounded,
-                label: 'Recherche',
-                selected: _currentIndex == 2,
-                onTap: () => setState(() => _currentIndex = 2),
-              ),
-              _NavItem(
-                icon: Icons.library_music_rounded,
-                label: 'Bibliothèque',
-                selected: _currentIndex == 3,
-                onTap: () => setState(() => _currentIndex = 3),
-              ),
-              _ProfileNavItem(
-                selected: false,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const ProfileScreen()),
-                  );
-                },
-                avatarUrl: authService.userAvatar,
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -144,111 +136,50 @@ class _MainNavigationState extends State<MainNavigation> {
   }
 }
 
-class _NavItem extends StatelessWidget {
+class _NavItem {
   final IconData icon;
   final String label;
+  const _NavItem({required this.icon, required this.label});
+}
+
+class _NavButton extends StatelessWidget {
+  final _NavItem item;
   final bool selected;
   final VoidCallback onTap;
-
-  const _NavItem({
-    required this.icon,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
+  const _NavButton(
+      {required this.item,
+      required this.selected,
+      required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final color = selected ? const Color(0xFFFF2D55) : Colors.grey;
+    final color =
+        selected ? AppColors.accent : AppColors.textTertiary;
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: SizedBox(
-        width: 70,
+        width: 72,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
-              child: Icon(icon, color: color, size: 26, key: ValueKey(selected)),
+              duration: const Duration(milliseconds: 180),
+              transitionBuilder: (child, anim) =>
+                  FadeTransition(opacity: anim, child: child),
+              child: Icon(item.icon,
+                  key: ValueKey(selected), color: color, size: 24),
             ),
-            const SizedBox(height: 3),
+            const SizedBox(height: 4),
             Text(
-              label,
-              style: TextStyle(
+              item.label,
+              style: AppTextStyles.caption2.copyWith(
                 color: color,
-                fontSize: 10,
                 fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
               ),
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _ProfileNavItem extends StatelessWidget {
-  final bool selected;
-  final VoidCallback onTap;
-  final String? avatarUrl;
-
-  const _ProfileNavItem({
-    required this.selected,
-    required this.onTap,
-    this.avatarUrl,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: SizedBox(
-        width: 70,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: selected ? const Color(0xFFFF2D55) : Colors.grey,
-                  width: 2,
-                ),
-              ),
-              child: ClipOval(
-                child: avatarUrl != null && avatarUrl!.isNotEmpty
-                    ? Image.network(
-                        avatarUrl!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => _defaultAvatar(),
-                      )
-                    : _defaultAvatar(),
-              ),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              'Profil',
-              style: TextStyle(
-                color: selected ? const Color(0xFFFF2D55) : Colors.grey,
-                fontSize: 10,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _defaultAvatar() {
-    return Container(
-      color: const Color(0xFFFF2D55),
-      child: const Center(
-        child: Icon(Icons.person, color: Colors.white, size: 16),
       ),
     );
   }
