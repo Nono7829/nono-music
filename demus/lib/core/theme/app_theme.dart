@@ -101,7 +101,7 @@ abstract final class AppTheme {
         ),
       ),
 
-      dialogTheme: DialogThemeData(
+      dialogTheme: DialogTheme(
         backgroundColor: AppColors.surfaceElevated,
         elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
