@@ -149,7 +149,7 @@ abstract final class AppTheme {
             s.contains(WidgetState.selected) ? AppColors.accent : AppColors.textTertiary),
         trackColor: WidgetStateProperty.resolveWith((s) =>
             s.contains(WidgetState.selected)
-                ? AppColors.accent.withOpacity(0.3)
+                ? AppColors.accent.withValues(alpha: 0.3)
                 : AppColors.surfaceHighlight),
         trackOutlineColor: WidgetStateProperty.all(Colors.transparent),
       ),

@@ -22,7 +22,7 @@ class _AuthScreenState extends State<AuthScreen> {
     if (!mounted) return;
     
     if (success) {
-      // Charger les données depuis Supabase
+      if (!mounted) return;
       await context.read<MusicProvider>().loadFromSupabase();
       
       ScaffoldMessenger.of(context).showSnackBar(

@@ -28,7 +28,7 @@ class MiniPlayer extends StatelessWidget {
           border: Border.all(color: AppColors.borderSubtle, width: 0.5),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.6),
+              color: Colors.black.withValues(alpha: 0.6),
               blurRadius: 24,
               offset: const Offset(0, 8),
             ),

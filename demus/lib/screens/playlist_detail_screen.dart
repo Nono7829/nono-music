@@ -47,6 +47,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
       });
       
       // Sauvegarder la cover dans la playlist
+      if (!mounted) return;
       context.read<MusicProvider>().updatePlaylistCover(
         widget.playlist['id'] as String,
         image.path,

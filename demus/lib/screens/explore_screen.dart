@@ -234,7 +234,7 @@ class _HeroBanner extends StatelessWidget {
               width: 52,
               height: 52,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
+                color: Colors.white.withValues(alpha:0.2),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.play_arrow_rounded,
@@ -336,10 +336,10 @@ class _MoodGrid extends StatelessWidget {
           onTap: () => onTap(m),
           child: Container(
             decoration: BoxDecoration(
-              color: m.color.withOpacity(0.12),
+              color: m.color.withValues(alpha:0.12),
               borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
               border: Border.all(
-                  color: m.color.withOpacity(0.25), width: 0.5),
+                  color: m.color.withValues(alpha:0.25), width: 0.5),
             ),
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
             child: Row(
@@ -390,10 +390,10 @@ class _GenreGrid extends StatelessWidget {
           onTap: () => onTap(g),
           child: Container(
             decoration: BoxDecoration(
-              color: g.color.withOpacity(0.12),
+              color: g.color.withValues(alpha:0.12),
               borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
               border: Border.all(
-                  color: g.color.withOpacity(0.3), width: 0.5),
+                  color: g.color.withValues(alpha:0.3), width: 0.5),
             ),
             padding: const EdgeInsets.symmetric(
                 horizontal: AppSpacing.md, vertical: AppSpacing.sm),
@@ -403,7 +403,7 @@ class _GenreGrid extends StatelessWidget {
                   width: 38,
                   height: 38,
                   decoration: BoxDecoration(
-                    color: g.color.withOpacity(0.18),
+                    color: g.color.withValues(alpha:0.18),
                     borderRadius:
                         BorderRadius.circular(AppSpacing.radiusSm),
                   ),

@@ -13,6 +13,7 @@ class AuthService {
   final SupabaseService _supabase = SupabaseService();
   final GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: ['email', 'profile'],
+    serverClientId: '988799160042-p5rkmd8qlgfgaohm5nrdr0823r92o7si.apps.googleusercontent.com',
   );
 
   bool get isAuthenticated => _supabase.isAuthenticated;
@@ -64,7 +65,6 @@ class AuthService {
             final response = await _supabase.client.auth.getSessionFromUrl(fullUri);
             debugPrint('[AUTH] ✅ Connexion PC réussie');
             return true;
-                      return false;
           }
         }
         return false; 
