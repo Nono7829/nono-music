@@ -10,7 +10,7 @@ class ProfileScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final authService = AuthService();
     final provider = context.watch<MusicProvider>();
-    
+
     return Scaffold(
       backgroundColor: const Color(0xFF0A0A0A),
       body: CustomScrollView(
@@ -21,7 +21,8 @@ class ProfileScreen extends StatelessWidget {
             pinned: true,
             backgroundColor: const Color(0xFF0A0A0A),
             leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFFFF2D55)),
+              icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                  color: Color(0xFFFF2D55)),
               onPressed: () => Navigator.of(context).pop(),
             ),
             flexibleSpace: FlexibleSpaceBar(
@@ -46,14 +47,17 @@ class ProfileScreen extends StatelessWidget {
                         height: 80,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          border: Border.all(color: const Color(0xFFFF2D55), width: 3),
+                          border: Border.all(
+                              color: const Color(0xFFFF2D55), width: 3),
                         ),
                         child: ClipOval(
-                          child: authService.userAvatar != null && authService.userAvatar!.isNotEmpty
+                          child: authService.userAvatar != null &&
+                                  authService.userAvatar!.isNotEmpty
                               ? Image.network(
                                   authService.userAvatar!,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => _defaultAvatar(),
+                                  errorBuilder: (_, __, ___) =>
+                                      _defaultAvatar(),
                                 )
                               : _defaultAvatar(),
                         ),
@@ -85,13 +89,17 @@ class ProfileScreen extends StatelessWidget {
           // Contenu (Statistiques et Paramètres)
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24.0),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
                     'Vos Statistiques',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                    style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white),
                   ),
                   const SizedBox(height: 16),
                   Row(
@@ -117,15 +125,18 @@ class ProfileScreen extends StatelessWidget {
                       ),
                     ],
                   ),
-                  
+
                   const SizedBox(height: 36),
-                  
+
                   const Text(
                     'Paramètres',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                    style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white),
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // Synchronisation
                   _SettingsTile(
                     icon: Icons.sync_rounded,
@@ -164,15 +175,18 @@ class ProfileScreen extends StatelessWidget {
                         builder: (ctx) => AlertDialog(
                           backgroundColor: const Color(0xFF1C1C1E),
                           title: const Text('Déconnexion'),
-                          content: const Text('Êtes-vous sûr de vouloir vous déconnecter ?'),
+                          content: const Text(
+                              'Êtes-vous sûr de vouloir vous déconnecter ?'),
                           actions: [
                             TextButton(
                               onPressed: () => Navigator.pop(ctx, false),
-                              child: const Text('Annuler', style: TextStyle(color: Colors.grey)),
+                              child: const Text('Annuler',
+                                  style: TextStyle(color: Colors.grey)),
                             ),
                             TextButton(
                               onPressed: () => Navigator.pop(ctx, true),
-                              child: const Text('Déconnexion', style: TextStyle(color: Color(0xFFFF453A))),
+                              child: const Text('Déconnexion',
+                                  style: TextStyle(color: Color(0xFFFF453A))),
                             ),
                           ],
                         ),
@@ -183,8 +197,9 @@ class ProfileScreen extends StatelessWidget {
                       }
                     },
                   ),
-                  
-                  const SizedBox(height: 60), // Espace pour ne pas bloquer le mini-player
+
+                  const SizedBox(
+                      height: 60), // Espace pour ne pas bloquer le mini-player
                 ],
               ),
             ),
@@ -255,7 +270,6 @@ class _SettingsTile extends StatelessWidget {
   final String title;
   final String? subtitle;
   final Color iconColor;
-  final Widget? trailing;
   final VoidCallback? onTap;
 
   const _SettingsTile({
@@ -263,7 +277,6 @@ class _SettingsTile extends StatelessWidget {
     required this.title,
     this.subtitle,
     this.iconColor = Colors.white,
-    this.trailing,
     this.onTap,
   });
 
@@ -299,7 +312,7 @@ class _SettingsTile extends StatelessWidget {
                 style: const TextStyle(color: Colors.grey, fontSize: 13),
               )
             : null,
-        trailing: trailing ?? const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+        trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
         onTap: onTap,
       ),
     );

@@ -13,7 +13,6 @@ import 'package:audio_service/audio_service.dart';
 import 'package:rxdart/rxdart.dart';
 
 import '../models/song.dart';
-import '../screens/import_playlist_screen.dart';
 import 'supabase_service.dart';
 import 'auth_service.dart';
 
@@ -85,6 +84,7 @@ class MusicProvider with ChangeNotifier {
   List<Song> get favoriteSongs => List.unmodifiable(_favoriteSongs);
   List<Song> get recentlyPlayed => List.unmodifiable(_recentlyPlayed);
   List<Song> get downloadedSongs => List.unmodifiable(_downloadedSongs);
+  List<Song> get songs => List.unmodifiable(_songs);
   Map<String, double> get downloadProgress =>
       Map.unmodifiable(_downloadProgress);
   List<Map<String, dynamic>> get playlists => List.unmodifiable(_playlists);
@@ -626,5 +626,26 @@ class MusicProvider with ChangeNotifier {
     clearSearch();
     notifyListeners();
   }
+
+  Future<List<Song>> importPlaylistFromUrl(String url) async {
+  try {
+    final response = await http.get(
+      Uri.parse('$_baseUrl/import-playlist?url=${Uri.encodeComponent(url)}'),
+    );
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      final List<Song> tracks = (data['tracks'] as List)
+          .map((t) => Song.fromJson(t))
+          .toList();
+      return tracks;
+    } else {
+      throw Exception('Erreur serveur: ${response.statusCode}');
+    }
+  } catch (e) {
+    debugPrint('Erreur importPlaylistFromUrl: $e');
+    rethrow;
+  }
+}
+
 }
 

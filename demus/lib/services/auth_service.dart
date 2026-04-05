@@ -62,7 +62,7 @@ class AuthService {
             await server.close(force: true); // Fermer le serveur
 
             // 5. Donner le lien intercepté à Supabase pour valider la connexion Flutter !
-            final response = await _supabase.client.auth.getSessionFromUrl(fullUri);
+            await _supabase.client.auth.getSessionFromUrl(fullUri);
             debugPrint('[AUTH] ✅ Connexion PC réussie');
             return true;
           }

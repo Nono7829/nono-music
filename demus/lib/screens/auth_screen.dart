@@ -24,7 +24,9 @@ class _AuthScreenState extends State<AuthScreen> {
     if (success) {
       if (!mounted) return;
       await context.read<MusicProvider>().loadFromSupabase();
-      
+    
+    if (!mounted) return;
+    
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('✅ Connexion réussie !'),
