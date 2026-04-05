@@ -7,15 +7,16 @@ import '../core/theme/app_text_styles.dart';
 import '../services/music_provider.dart';
 import '../models/song.dart';
 import '../screens/profile_screen.dart';
+import '../services/auth_service.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   String _greeting() {
     final hour = DateTime.now().hour;
-    if (hour < 12) return 'Good morning';
-    if (hour < 18) return 'Good afternoon';
-    return 'Good evening';
+    if (hour < 12) return 'Bonjour';
+    if (hour < 18) return 'Bon après-midi';
+    return 'Bonsoir';
   }
 
   @override
@@ -76,17 +77,37 @@ class HomeScreen extends StatelessWidget {
 class _ProfileAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final auth      = AuthService();
+    final avatarUrl = auth.userAvatar;
+    final userName  = auth.userName ?? '';
+    final initiale  = userName.isNotEmpty ? userName[0].toUpperCase() : 'U';
+
+    if (avatarUrl != null && avatarUrl.isNotEmpty) {
+      return ClipOval(
+        child: Image.network(
+          avatarUrl,
+          width: 34,
+          height: 34,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _fallback(initiale),
+        ),
+      );
+    }
+    return _fallback(initiale);
+  }
+
+  Widget _fallback(String initiale) {
     return Container(
       width: 34,
       height: 34,
       decoration: const BoxDecoration(
-        color: AppColors.accent,
+        color: AppColors.surfaceHighlight,
         shape: BoxShape.circle,
       ),
-      child: const Center(
+      child: Center(
         child: Text(
-          'N',
-          style: TextStyle(
+          initiale,
+          style: const TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.w700,
             fontSize: 15,
@@ -112,7 +133,7 @@ class _RecentlyPlayedSection extends StatelessWidget {
         const SizedBox(height: AppSpacing.lg),
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: AppSpacing.screenHPad),
-          child: Text('Recently played', style: AppTextStyles.sectionHeader),
+          child: Text('Écoutés récemment', style: AppTextStyles.sectionHeader),
         ),
         const SizedBox(height: AppSpacing.md),
         // ── FIX: height calculated to avoid overflow ──
@@ -206,7 +227,7 @@ class _FavoritesSection extends StatelessWidget {
       children: [
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: AppSpacing.screenHPad),
-          child: Text('Your favorites', style: AppTextStyles.sectionHeader),
+          child: Text('Vos favoris', style: AppTextStyles.sectionHeader),
         ),
         const SizedBox(height: AppSpacing.sm),
         ...favorites
@@ -290,10 +311,10 @@ class _WelcomeState extends StatelessWidget {
                 const Icon(Icons.music_note, color: AppColors.accent, size: 40),
           ),
           const SizedBox(height: AppSpacing.lg),
-          const Text('Welcome to Nono Music', style: AppTextStyles.title3),
+          const Text('Bienvenue sur Nono Music', style: AppTextStyles.title3),
           const SizedBox(height: AppSpacing.sm),
           const Text(
-            'Search for something to start listening.',
+            'Recherchez un titre pour commencer l\'écoute.',
             style: AppTextStyles.subhead,
             textAlign: TextAlign.center,
           ),

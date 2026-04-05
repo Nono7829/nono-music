@@ -13,6 +13,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:rxdart/rxdart.dart';
 
 import '../models/song.dart';
+import '../screens/import_playlist_screen.dart';
 import 'supabase_service.dart';
 import 'auth_service.dart';
 
@@ -24,38 +25,38 @@ class PositionData {
 }
 
 class MusicProvider with ChangeNotifier {
-static const String _baseUrl = 'https://nono-music.onrender.com';
+  static const String _baseUrl = 'https://nono-music.onrender.com';
 
   final SupabaseService _supabase = SupabaseService();
   final AuthService _auth = AuthService();
 
-  static const _kPlaylists      = 'nono_playlists';
-  static const _kFavorites      = 'nono_favorites';
+  static const _kPlaylists = 'nono_playlists';
+  static const _kFavorites = 'nono_favorites';
   static const _kRecentlyPlayed = 'nono_recently_played';
-  static const _kDownloads      = 'downloaded_songs';
+  static const _kDownloads = 'downloaded_songs';
 
   // ── Search ────────────────────────────────────────────────────────────────
-  List<Song> _songs       = [];
-  bool _isLoading         = false;
+  List<Song> _songs = [];
+  bool _isLoading = false;
   String? _errorMessage;
   Timer? _searchDebounce;
 
   // ── Playback ──────────────────────────────────────────────────────────────
-  Song?      _currentSong;
-  List<Song> _queue        = [];
-  int        _currentIndex = -1;
-  int        _loadId       = 0;
-  bool       _isPlaying    = false;
-  bool       _isAudioLoading = false;
-  bool       _autoPlayNext = true;
+  Song? _currentSong;
+  List<Song> _queue = [];
+  int _currentIndex = -1;
+  int _loadId = 0;
+  bool _isPlaying = false;
+  bool _isAudioLoading = false;
+  bool _autoPlayNext = true;
 
   // ── Library ───────────────────────────────────────────────────────────────
-  List<Song>                 _favoriteSongs  = [];
-  List<Song>                 _recentlyPlayed = [];
-  List<Map<String, dynamic>> _playlists      = [];
+  List<Song> _favoriteSongs = [];
+  List<Song> _recentlyPlayed = [];
+  List<Map<String, dynamic>> _playlists = [];
 
   // ── Downloads ─────────────────────────────────────────────────────────────
-  List<Song>            _downloadedSongs   = [];
+  List<Song> _downloadedSongs = [];
   final Map<String, double> _downloadProgress = {};
 
   // ── Audio player (single instance, lives for app lifetime) ────────────────
@@ -74,16 +75,18 @@ static const String _baseUrl = 'https://nono-music.onrender.com';
   bool get autoPlayNext => _autoPlayNext;
 
   // ── Getters ───────────────────────────────────────────────────────────────
-  List<Song>  get songs            => List.unmodifiable(_songs);
-  bool        get isLoading        => _isLoading;
-  String?     get errorMessage     => _errorMessage;
-  Song?       get currentSong      => _currentSong;
-  bool        get isPlaying        => _isPlaying;
-  bool        get isAudioLoading   => _isAudioLoading;
-  List<Song>  get favoriteSongs    => List.unmodifiable(_favoriteSongs);
-  List<Song>  get recentlyPlayed   => List.unmodifiable(_recentlyPlayed);
-  List<Song>  get downloadedSongs  => List.unmodifiable(_downloadedSongs);
-  Map<String, double> get downloadProgress => Map.unmodifiable(_downloadProgress);
+  List<Song> get queue => List.unmodifiable(_queue);
+  int get currentQueueIndex => _currentIndex;
+  bool get isLoading => _isLoading;
+  String? get errorMessage => _errorMessage;
+  Song? get currentSong => _currentSong;
+  bool get isPlaying => _isPlaying;
+  bool get isAudioLoading => _isAudioLoading;
+  List<Song> get favoriteSongs => List.unmodifiable(_favoriteSongs);
+  List<Song> get recentlyPlayed => List.unmodifiable(_recentlyPlayed);
+  List<Song> get downloadedSongs => List.unmodifiable(_downloadedSongs);
+  Map<String, double> get downloadProgress =>
+      Map.unmodifiable(_downloadProgress);
   List<Map<String, dynamic>> get playlists => List.unmodifiable(_playlists);
 
   // ── Constructor ───────────────────────────────────────────────────────────
@@ -115,17 +118,20 @@ static const String _baseUrl = 'https://nono-music.onrender.com';
 
   // ── Serialization ─────────────────────────────────────────────────────────
   static Map<String, dynamic> _songToJson(Song s) => {
-    'id': s.id, 'title': s.title, 'artist': s.artist,
-    'duration': s.duration, 'coverUrl': s.coverUrl,
-  };
+        'id': s.id,
+        'title': s.title,
+        'artist': s.artist,
+        'duration': s.duration,
+        'coverUrl': s.coverUrl,
+      };
 
   static Song _songFromJson(Map<String, dynamic> j) => Song(
-    id:       j['id']       as String,
-    title:    j['title']    as String,
-    artist:   j['artist']   as String,
-    duration: (j['duration'] as num?)?.toInt() ?? 0,
-    coverUrl: (j['coverUrl'] as String?) ?? '',
-  );
+        id: j['id'] as String,
+        title: j['title'] as String,
+        artist: j['artist'] as String,
+        duration: (j['duration'] as num?)?.toInt() ?? 0,
+        coverUrl: (j['coverUrl'] as String?) ?? '',
+      );
 
   // ── Cloud sync ────────────────────────────────────────────────────────────
   Future<void> loadFromSupabase() async {
@@ -135,11 +141,12 @@ static const String _baseUrl = 'https://nono-music.onrender.com';
     }
     try {
       debugPrint('[SYNC] Loading from Supabase…');
-      _favoriteSongs  = await _supabase.getFavorites();
-      _playlists      = await _supabase.getPlaylists();
+      _favoriteSongs = await _supabase.getFavorites();
+      _playlists = await _supabase.getPlaylists();
       _recentlyPlayed = await _supabase.getRecentlyPlayed();
       await _loadDownloads();
-      debugPrint('[SYNC] ✅ ${_favoriteSongs.length} favorites, ${_playlists.length} playlists');
+      debugPrint(
+          '[SYNC] ✅ ${_favoriteSongs.length} favorites, ${_playlists.length} playlists');
       notifyListeners();
     } catch (e) {
       debugPrint('[SYNC] ❌ $e');
@@ -173,10 +180,10 @@ static const String _baseUrl = 'https://nono-music.onrender.com';
               .map((s) => _songFromJson(s as Map<String, dynamic>))
               .toList();
           return <String, dynamic>{
-            'id':       pl['id']   as String,
-            'name':     pl['name'] as String,
+            'id': pl['id'] as String,
+            'name': pl['name'] as String,
             'coverUrl': pl['coverUrl'] as String?,
-            'songs':    songs,
+            'songs': songs,
           };
         }).toList();
       }
@@ -200,8 +207,8 @@ static const String _baseUrl = 'https://nono-music.onrender.com';
 
   Future<void> _saveFavorites() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_kFavorites,
-        jsonEncode(_favoriteSongs.map(_songToJson).toList()));
+    await prefs.setString(
+        _kFavorites, jsonEncode(_favoriteSongs.map(_songToJson).toList()));
     if (_auth.isAuthenticated) {
       unawaited(_supabase.syncFavorites(_favoriteSongs).catchError(
             (e) => debugPrint('[SYNC] favorites error: $e'),
@@ -222,12 +229,14 @@ static const String _baseUrl = 'https://nono-music.onrender.com';
 
   Future<void> _savePlaylists() async {
     final prefs = await SharedPreferences.getInstance();
-    final data = _playlists.map((pl) => {
-      'id':       pl['id'],
-      'name':     pl['name'],
-      'coverUrl': pl['coverUrl'],
-      'songs':    (pl['songs'] as List<Song>).map(_songToJson).toList(),
-    }).toList();
+    final data = _playlists
+        .map((pl) => {
+              'id': pl['id'],
+              'name': pl['name'],
+              'coverUrl': pl['coverUrl'],
+              'songs': (pl['songs'] as List<Song>).map(_songToJson).toList(),
+            })
+        .toList();
     await prefs.setString(_kPlaylists, jsonEncode(data));
     if (_auth.isAuthenticated) {
       unawaited(_supabase.syncPlaylists(_playlists).catchError(
@@ -238,8 +247,8 @@ static const String _baseUrl = 'https://nono-music.onrender.com';
 
   Future<void> _saveDownloads() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_kDownloads,
-        jsonEncode(_downloadedSongs.map(_songToJson).toList()));
+    await prefs.setString(
+        _kDownloads, jsonEncode(_downloadedSongs.map(_songToJson).toList()));
   }
 
   // ── Search (debounced) ────────────────────────────────────────────────────
@@ -261,35 +270,43 @@ static const String _baseUrl = 'https://nono-music.onrender.com';
     final q = query.trim();
     if (q.isEmpty) return;
 
-    _isLoading    = true;
+    _isLoading = true;
     _errorMessage = null;
-    _songs        = [];
+    _songs = [];
     notifyListeners();
 
+    final endpoint = _useSpotify ? '/spotify-search' : '/search';
+
     try {
-      final uri = Uri.parse('$_baseUrl/search')
-          .replace(queryParameters: {'q': q});
-      final resp = await http.get(uri).timeout(const Duration(seconds: 30));
+      final uri =
+          Uri.parse('$_baseUrl$endpoint').replace(queryParameters: {'q': q});
+      final resp = await http.get(uri).timeout(
+            Duration(seconds: _useSpotify ? 90 : 30), // Spotify est plus lent
+          );
 
       if (resp.statusCode != 200) {
-        _errorMessage = 'Server error (${resp.statusCode})';
+        _errorMessage = 'Erreur serveur (${resp.statusCode})';
       } else {
         final body = jsonDecode(resp.body) as Map<String, dynamic>?;
         if (body?['results'] is List) {
           for (final item in body!['results'] as List) {
             if (item is Map<String, dynamic>) {
-              try { _songs.add(Song.fromJson(item)); } catch (_) {}
+              try {
+                _songs.add(Song.fromJson(item));
+              } catch (_) {}
             }
           }
         }
-        debugPrint('[SEARCH] ${_songs.length} results for "$q"');
+        debugPrint(
+            '[SEARCH${_useSpotify ? "/SPOTIFY" : ""}] ${_songs.length} résultats pour "$q"');
       }
     } on http.ClientException {
-      _errorMessage = 'Server unreachable.\nRun: cd demus-backend && node server.js';
+      _errorMessage =
+          'Serveur inaccessible.\nLance : cd demus-backend && node server.js';
     } on TimeoutException {
-      _errorMessage = 'Request timed out. Check backend connectivity.';
+      _errorMessage = 'Délai dépassé. Vérifie la connexion au backend.';
     } catch (e) {
-      _errorMessage = 'Error: $e';
+      _errorMessage = 'Erreur : $e';
     }
 
     _isLoading = false;
@@ -298,23 +315,30 @@ static const String _baseUrl = 'https://nono-music.onrender.com';
 
   void clearSearch() {
     _searchDebounce?.cancel();
-    _songs        = [];
+    _songs = [];
     _errorMessage = null;
     notifyListeners();
   }
 
   // ── Playback ──────────────────────────────────────────────────────────────
+  void playSongFromQueue(int index) {
+    if (index < 0 || index >= _queue.length) return;
+    playSong(_queue[index], queue: _queue);
+  }
 
   Future<void> playSong(Song song, {List<Song>? queue}) async {
     final myId = ++_loadId;
 
     _currentSong = song;
     final sourceQueue = queue ?? (_songs.isNotEmpty ? _songs : [song]);
-    _queue        = List.from(sourceQueue);
+    _queue = List.from(sourceQueue);
     _currentIndex = _queue.indexWhere((s) => s.id == song.id);
-    if (_currentIndex == -1) { _queue = [song]; _currentIndex = 0; }
+    if (_currentIndex == -1) {
+      _queue = [song];
+      _currentIndex = 0;
+    }
 
-    _isPlaying      = true;
+    _isPlaying = true;
     _isAudioLoading = true;
 
     _recentlyPlayed.removeWhere((s) => s.id == song.id);
@@ -332,8 +356,8 @@ static const String _baseUrl = 'https://nono-music.onrender.com';
       if (myId != _loadId) return;
 
       final tag = MediaItem(
-        id:     song.id,
-        title:  song.title,
+        id: song.id,
+        title: song.title,
         artist: song.artist,
         artUri: song.coverUrl.isNotEmpty ? Uri.parse(song.coverUrl) : null,
       );
@@ -351,7 +375,7 @@ static const String _baseUrl = 'https://nono-music.onrender.com';
     } catch (e) {
       debugPrint('[AUDIO] playSong error: $e');
       if (myId == _loadId) {
-        _isPlaying      = false;
+        _isPlaying = false;
         _isAudioLoading = false;
         notifyListeners();
       }
@@ -360,7 +384,7 @@ static const String _baseUrl = 'https://nono-music.onrender.com';
 
   Future<String> _resolveSource(Song song) async {
     try {
-      final dir   = await getApplicationDocumentsDirectory();
+      final dir = await getApplicationDocumentsDirectory();
       final local = File('${dir.path}/${song.id}.m4a');
       if (await local.exists()) {
         final size = await local.length();
@@ -400,7 +424,7 @@ static const String _baseUrl = 'https://nono-music.onrender.com';
     if (_currentIndex >= 0 && _currentIndex < _queue.length - 1) {
       playSong(_queue[_currentIndex + 1], queue: _queue);
     } else {
-      _isPlaying      = false;
+      _isPlaying = false;
       _isAudioLoading = false;
       notifyListeners();
     }
@@ -439,10 +463,10 @@ static const String _baseUrl = 'https://nono-music.onrender.com';
 
   void createPlaylist(String name, {String? coverUrl}) {
     _playlists.add({
-      'id':       DateTime.now().millisecondsSinceEpoch.toString(),
-      'name':     name,
+      'id': DateTime.now().millisecondsSinceEpoch.toString(),
+      'name': name,
       'coverUrl': coverUrl,
-      'songs':    <Song>[],
+      'songs': <Song>[],
     });
     unawaited(_savePlaylists());
     notifyListeners();
@@ -455,8 +479,8 @@ static const String _baseUrl = 'https://nono-music.onrender.com';
   }
 
   void renamePlaylist(String playlistId, String newName) {
-    final pl = _playlists.firstWhere(
-        (p) => p['id'] == playlistId, orElse: () => {});
+    final pl =
+        _playlists.firstWhere((p) => p['id'] == playlistId, orElse: () => {});
     if (pl.isNotEmpty) {
       pl['name'] = newName;
       unawaited(_savePlaylists());
@@ -465,8 +489,8 @@ static const String _baseUrl = 'https://nono-music.onrender.com';
   }
 
   void updatePlaylistCover(String playlistId, String coverUrl) {
-    final pl = _playlists.firstWhere(
-        (p) => p['id'] == playlistId, orElse: () => {});
+    final pl =
+        _playlists.firstWhere((p) => p['id'] == playlistId, orElse: () => {});
     if (pl.isNotEmpty) {
       pl['coverUrl'] = coverUrl;
       unawaited(_savePlaylists());
@@ -475,8 +499,8 @@ static const String _baseUrl = 'https://nono-music.onrender.com';
   }
 
   void addSongToPlaylist(String playlistId, Song song) {
-    final pl = _playlists.firstWhere(
-        (p) => p['id'] == playlistId, orElse: () => {});
+    final pl =
+        _playlists.firstWhere((p) => p['id'] == playlistId, orElse: () => {});
     if (pl.isNotEmpty) {
       final songs = pl['songs'] as List<Song>;
       if (!songs.any((s) => s.id == song.id)) {
@@ -488,8 +512,8 @@ static const String _baseUrl = 'https://nono-music.onrender.com';
   }
 
   void removeSongFromPlaylist(String playlistId, String songId) {
-    final pl = _playlists.firstWhere(
-        (p) => p['id'] == playlistId, orElse: () => {});
+    final pl =
+        _playlists.firstWhere((p) => p['id'] == playlistId, orElse: () => {});
     if (pl.isNotEmpty) {
       (pl['songs'] as List<Song>).removeWhere((s) => s.id == songId);
       unawaited(_savePlaylists());
@@ -498,15 +522,15 @@ static const String _baseUrl = 'https://nono-music.onrender.com';
   }
 
   Future<List<Song>> getPlaylistSongs(String playlistId) async {
-    final pl = _playlists.firstWhere(
-        (p) => p['id'] == playlistId, orElse: () => {});
+    final pl =
+        _playlists.firstWhere((p) => p['id'] == playlistId, orElse: () => {});
     if (pl.isEmpty) return [];
     return List<Song>.from(pl['songs'] as List<Song>);
   }
 
   bool isPlaylistFullyDownloaded(String playlistId) {
-    final pl = _playlists.firstWhere(
-        (p) => p['id'] == playlistId, orElse: () => {});
+    final pl =
+        _playlists.firstWhere((p) => p['id'] == playlistId, orElse: () => {});
     if (pl.isEmpty) return false;
     final songs = pl['songs'] as List<Song>;
     if (songs.isEmpty) return false;
@@ -537,36 +561,38 @@ static const String _baseUrl = 'https://nono-music.onrender.com';
 
     bool success = false;
     try {
-      final resp = await http
-          .get(Uri.parse('$_baseUrl/stream/${song.id}'))
-          .timeout(const Duration(seconds: 30));
+      final dir = await getApplicationDocumentsDirectory();
+      final savePath = '${dir.path}/${song.id}.m4a';
 
-      if (resp.statusCode == 200) {
-        final streamUrl =
-            (jsonDecode(resp.body) as Map<String, dynamic>)['url'] as String?;
-        if (streamUrl != null && streamUrl.isNotEmpty) {
-          final dir      = await getApplicationDocumentsDirectory();
-          final savePath = '${dir.path}/${song.id}.m4a';
-          await Dio().download(
-            streamUrl,
-            savePath,
-            onReceiveProgress: (rec, tot) {
-              if (tot > 0) {
-                _downloadProgress[song.id] = rec / tot;
-                notifyListeners();
-              }
-            },
-            options: Options(headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-            }),
-          );
+      // On passe par /proxy qui gère correctement les headers YouTube
+      await Dio().download(
+        '$_baseUrl/proxy/${song.id}',
+        savePath,
+        onReceiveProgress: (rec, tot) {
+          if (tot > 0) {
+            _downloadProgress[song.id] = rec / tot;
+            notifyListeners();
+          }
+        },
+        options: Options(
+          receiveTimeout: const Duration(minutes: 5),
+          sendTimeout: const Duration(seconds: 30),
+        ),
+      );
+
+      final file = File(savePath);
+      if (await file.exists() && await file.length() > 50000) {
+        if (!_downloadedSongs.any((s) => s.id == song.id)) {
           _downloadedSongs.add(song);
-          await _saveDownloads();
-          success = true;
         }
+        await _saveDownloads();
+        success = true;
+      } else {
+        debugPrint('[DOWNLOAD] Fichier invalide ou trop petit, suppression');
+        if (await file.exists()) await file.delete();
       }
     } catch (e) {
-      debugPrint('[DOWNLOAD] error: $e');
+      debugPrint('[DOWNLOAD] Erreur: $e');
     }
 
     _downloadProgress.remove(song.id);
@@ -576,7 +602,7 @@ static const String _baseUrl = 'https://nono-music.onrender.com';
 
   Future<void> removeDownload(Song song) async {
     try {
-      final dir  = await getApplicationDocumentsDirectory();
+      final dir = await getApplicationDocumentsDirectory();
       final file = File('${dir.path}/${song.id}.m4a');
       if (await file.exists()) await file.delete();
     } catch (_) {}
@@ -591,4 +617,14 @@ static const String _baseUrl = 'https://nono-music.onrender.com';
     _player.dispose();
     super.dispose();
   }
+  // ── Mode source ───────────────────────────────────────────────────────────────
+  bool _useSpotify = false;
+  bool get useSpotify => _useSpotify;
+
+  void toggleSearchSource() {
+    _useSpotify = !_useSpotify;
+    clearSearch();
+    notifyListeners();
+  }
 }
+

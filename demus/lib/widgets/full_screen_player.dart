@@ -7,6 +7,7 @@ import '../core/theme/app_text_styles.dart';
 import '../core/constants/app_spacing.dart';
 import '../services/music_provider.dart';
 import 'song_options_menu.dart';
+import 'queue_sheet.dart';
 
 class FullScreenPlayer extends StatelessWidget {
   const FullScreenPlayer({super.key});
@@ -26,8 +27,7 @@ class FullScreenPlayer extends StatelessWidget {
     return SizedBox(
       height: MediaQuery.of(context).size.height * 0.92,
       child: ClipRRect(
-        borderRadius:
-            const BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -74,7 +74,7 @@ class FullScreenPlayer extends StatelessWidget {
                         ),
                         Expanded(
                           child: Text(
-                            'Now Playing',
+                            'En lecture',
                             textAlign: TextAlign.center,
                             style: AppTextStyles.calloutMedium
                                 .copyWith(color: Colors.white60),
@@ -97,8 +97,8 @@ class FullScreenPlayer extends StatelessWidget {
                       child: AspectRatio(
                         aspectRatio: 1,
                         child: ClipRRect(
-                          borderRadius: BorderRadius.circular(
-                              AppSpacing.albumArtLg + 2),
+                          borderRadius:
+                              BorderRadius.circular(AppSpacing.albumArtLg + 2),
                           child: song.coverUrl.isNotEmpty
                               ? Image.network(song.coverUrl,
                                   fit: BoxFit.cover,
@@ -112,8 +112,8 @@ class FullScreenPlayer extends StatelessWidget {
 
                   // Title + favorite
                   Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.xl),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
                     child: Row(
                       children: [
                         Expanded(
@@ -154,16 +154,14 @@ class FullScreenPlayer extends StatelessWidget {
                   // Controls
                   const Padding(
                     padding: EdgeInsets.fromLTRB(
-                        AppSpacing.lg, AppSpacing.sm,
-                        AppSpacing.lg, 0),
+                        AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, 0),
                     child: _ControlRow(),
                   ),
 
                   // Volume
                   const Padding(
                     padding: EdgeInsets.fromLTRB(
-                        AppSpacing.xl, AppSpacing.md,
-                        AppSpacing.xl, 0),
+                        AppSpacing.xl, AppSpacing.md, AppSpacing.xl, 0),
                     child: _VolumeSlider(),
                   ),
                   const SizedBox(height: AppSpacing.lg),
@@ -177,9 +175,8 @@ class FullScreenPlayer extends StatelessWidget {
   }
 
   Widget _placeholder() => Container(
-        color: AppColors.surfaceHighlight,
-        child: const Icon(Icons.music_note,
-            color: Colors.white24, size: 80));
+      color: AppColors.surfaceHighlight,
+      child: const Icon(Icons.music_note, color: Colors.white24, size: 80));
 }
 
 // ── Sub-widgets ───────────────────────────────────────────────────────────────
@@ -190,16 +187,14 @@ class _FavoriteButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isFav =
-        context.select((MusicProvider p) => p.isFavorite(song));
+    final isFav = context.select((MusicProvider p) => p.isFavorite(song));
     return IconButton(
       icon: Icon(
         isFav ? Icons.favorite : Icons.favorite_border,
         color: isFav ? AppColors.accent : Colors.white54,
         size: 26,
       ),
-      onPressed: () =>
-          context.read<MusicProvider>().toggleFavorite(song),
+      onPressed: () => context.read<MusicProvider>().toggleFavorite(song),
     );
   }
 }
@@ -214,9 +209,9 @@ class _ProgressBar extends StatelessWidget {
     return StreamBuilder<PositionData>(
       stream: provider.positionDataStream,
       builder: (_, snap) {
-        final pd  = snap.data;
+        final pd = snap.data;
         final pos = pd?.position ?? Duration.zero;
-        final dur = pd?.duration  ?? Duration.zero;
+        final dur = pd?.duration ?? Duration.zero;
         final pct = dur.inMilliseconds > 0
             ? (pos.inMilliseconds / dur.inMilliseconds).clamp(0.0, 1.0)
             : 0.0;
@@ -226,12 +221,11 @@ class _ProgressBar extends StatelessWidget {
             SliderTheme(
               data: SliderTheme.of(context).copyWith(
                 trackHeight: 3,
-                thumbShape:
-                    const RoundSliderThumbShape(enabledThumbRadius: 6),
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
                 overlayShape: SliderComponentShape.noOverlay,
-                activeTrackColor:   Colors.white,
+                activeTrackColor: Colors.white,
                 inactiveTrackColor: Colors.white24,
-                thumbColor:         Colors.white,
+                thumbColor: Colors.white,
               ),
               child: Slider(
                 value: pct,
@@ -242,8 +236,7 @@ class _ProgressBar extends StatelessWidget {
               ),
             ),
             Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -268,17 +261,17 @@ class _ControlRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final provider   = context.watch<MusicProvider>();
-    final isLoading  = provider.isAudioLoading;
-    final isPlaying  = provider.isPlaying;
+    final provider = context.watch<MusicProvider>();
+    final isLoading = provider.isAudioLoading;
+    final isPlaying = provider.isPlaying;
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
         IconButton(
-          icon: const Icon(Icons.shuffle_rounded,
-              color: Colors.white38, size: 22),
-          onPressed: () {},
+          icon: const Icon(Icons.queue_music_rounded,
+              color: Colors.white70, size: 22),
+          onPressed: () => showQueueSheet(context),
         ),
         IconButton(
           icon: const Icon(Icons.skip_previous_rounded,
@@ -298,9 +291,7 @@ class _ControlRow extends StatelessWidget {
                     child: CircularProgressIndicator(
                         strokeWidth: 2.5, color: Colors.black))
                 : Icon(
-                    isPlaying
-                        ? Icons.pause_rounded
-                        : Icons.play_arrow_rounded,
+                    isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
                     color: Colors.black,
                     size: 40,
                   ),
@@ -312,8 +303,8 @@ class _ControlRow extends StatelessWidget {
           onPressed: isLoading ? null : provider.playNext,
         ),
         IconButton(
-          icon: const Icon(Icons.repeat_rounded,
-              color: Colors.white38, size: 22),
+          icon:
+              const Icon(Icons.repeat_rounded, color: Colors.white38, size: 22),
           onPressed: () {},
         ),
       ],
@@ -328,14 +319,10 @@ class _VolumeSlider extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        const Icon(Icons.volume_down_rounded,
-            color: Colors.white38, size: 18),
+        const Icon(Icons.volume_down_rounded, color: Colors.white38, size: 18),
         Expanded(
           child: StreamBuilder<double>(
-            stream: context
-                .read<MusicProvider>()
-                .audioPlayer
-                .volumeStream,
+            stream: context.read<MusicProvider>().audioPlayer.volumeStream,
             builder: (_, snap) {
               final vol = snap.data ?? 1.0;
               return SliderTheme(
@@ -344,23 +331,20 @@ class _VolumeSlider extends StatelessWidget {
                   thumbShape:
                       const RoundSliderThumbShape(enabledThumbRadius: 6),
                   overlayShape: SliderComponentShape.noOverlay,
-                  activeTrackColor:   Colors.white38,
+                  activeTrackColor: Colors.white38,
                   inactiveTrackColor: Colors.white12,
-                  thumbColor:         Colors.white38,
+                  thumbColor: Colors.white38,
                 ),
                 child: Slider(
                   value: vol,
-                  onChanged: (v) => context
-                      .read<MusicProvider>()
-                      .audioPlayer
-                      .setVolume(v),
+                  onChanged: (v) =>
+                      context.read<MusicProvider>().audioPlayer.setVolume(v),
                 ),
               );
             },
           ),
         ),
-        const Icon(Icons.volume_up_rounded,
-            color: Colors.white38, size: 18),
+        const Icon(Icons.volume_up_rounded, color: Colors.white38, size: 18),
       ],
     );
   }

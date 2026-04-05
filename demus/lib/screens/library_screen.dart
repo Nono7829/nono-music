@@ -45,13 +45,7 @@ class LibraryScreen extends StatelessWidget {
                     onTap: () => _showSheet(context, 'Téléchargés', provider.downloadedSongs, green: true)),
                 ]),
                 const SizedBox(height: 28),
-                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                  const Text('Playlists', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-                  GestureDetector(
-                    onTap: () => _showCreateDialog(context),
-                    child: const Text('Nouvelle', style: TextStyle(color: Color(0xFFFF2D55), fontSize: 14)),
-                  ),
-                ]),
+                const Text('Playlists', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 8),
                 if (provider.playlists.isEmpty)
                   const Padding(

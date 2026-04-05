@@ -123,7 +123,7 @@ class ExploreScreen extends StatelessWidget {
                 // Charts
                 const _SectionLabel(
                     title: 'Charts',
-                    subtitle: 'What\'s trending right now'),
+                    subtitle: 'Ce qui cartonne en ce moment'),
                 const SizedBox(height: AppSpacing.md),
                 SizedBox(
                   height: 88,
@@ -146,8 +146,8 @@ class ExploreScreen extends StatelessWidget {
 
                 // Moods
                 const _SectionLabel(
-                    title: 'Moods & moments',
-                    subtitle: 'A playlist for every feeling'),
+                    title: 'Humeurs & moments',
+                    subtitle: 'Une playlist pour chaque humeur'),
                 const SizedBox(height: AppSpacing.md),
                 Padding(
                   padding: const EdgeInsets.symmetric(
@@ -162,7 +162,7 @@ class ExploreScreen extends StatelessWidget {
                 // Genres
                 const _SectionLabel(
                     title: 'Genres',
-                    subtitle: 'Dive into a sound'),
+                    subtitle: 'Plongez dans un univers musical'),
                 const SizedBox(height: AppSpacing.md),
                 Padding(
                   padding: const EdgeInsets.symmetric(
@@ -176,8 +176,8 @@ class ExploreScreen extends StatelessWidget {
 
                 // Artists
                 const _SectionLabel(
-                    title: 'Popular artists',
-                    subtitle: 'Quick search by artist'),
+                    title: 'Artists populaires',
+                    subtitle: 'Recherche rapide par artiste'),
                 const SizedBox(height: AppSpacing.md),
                 Padding(
                   padding: const EdgeInsets.symmetric(
@@ -224,7 +224,7 @@ class _HeroBanner extends StatelessWidget {
                       style: AppTextStyles.title2
                           .copyWith(color: Colors.white)),
                   const SizedBox(height: 4),
-                  Text('The biggest tracks right now',
+                  Text('Les plus grands hits du moment',
                       style: AppTextStyles.subhead
                           .copyWith(color: Colors.white70)),
                 ],

@@ -179,6 +179,87 @@ function getStreamUrl(videoId) {
   return promise;
 }
 
+// ── Spotify ───────────────────────────────────────────────────────────────────
+let _spotifyToken       = null;
+let _spotifyTokenExpiry = 0;
+
+async function getSpotifyToken() {
+  if (_spotifyToken && Date.now() < _spotifyTokenExpiry) return _spotifyToken;
+  const id     = process.env.SPOTIFY_CLIENT_ID;
+  const secret = process.env.SPOTIFY_CLIENT_SECRET;
+  if (!id || !secret) throw new Error('SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET manquants');
+  const creds = Buffer.from(`${id}:${secret}`).toString('base64');
+  const res   = await fetch('https://accounts.spotify.com/api/token', {
+    method: 'POST',
+    headers: {
+      'Content-Type':  'application/x-www-form-urlencoded',
+      'Authorization': `Basic ${creds}`,
+    },
+    body: 'grant_type=client_credentials',
+  });
+  const data          = await res.json();
+  _spotifyToken       = data.access_token;
+  _spotifyTokenExpiry = Date.now() + (data.expires_in - 60) * 1000;
+  return _spotifyToken;
+}
+
+async function resolveYouTubeId(title, artist) {
+  return new Promise((resolve) => {
+    const q   = `${artist} - ${title} official audio`;
+    const cmd = `"${YT_DLP}" "ytsearch1:${q}" --get-id --no-warnings --flat-playlist`;
+    exec(cmd, { timeout: 15000 }, (err, stdout) => {
+      if (err || !stdout.trim()) return resolve(null);
+      resolve(stdout.trim().split('\n')[0].trim());
+    });
+  });
+}
+
+app.get('/spotify-search', async (req, res) => {
+  const q = (req.query.q || '').trim();
+  if (!q) return res.status(400).json({ error: 'Paramètre q manquant' });
+
+  try {
+    const token    = await getSpotifyToken();
+    const spotRes  = await fetch(
+      `https://api.spotify.com/v1/search?q=${encodeURIComponent(q)}&type=track&limit=15&market=FR`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    const spotData = await spotRes.json();
+    const tracks   = spotData.tracks?.items || [];
+
+    console.log(`[SPOTIFY] "${q}" → ${tracks.length} pistes, résolution YouTube…`);
+
+    // Résolution en parallèle (limité à 5 simultanés pour ne pas surcharger)
+    const BATCH = 5;
+    const results = [];
+    for (let i = 0; i < tracks.length; i += BATCH) {
+      const batch = tracks.slice(i, i + BATCH);
+      const resolved = await Promise.allSettled(
+        batch.map(async (t) => {
+          const ytId = await resolveYouTubeId(t.name, t.artists[0]?.name || '');
+          if (!ytId) return null;
+          return {
+            id:        ytId,
+            title:     t.name,
+            artist:    t.artists.map(a => a.name).join(', '),
+            thumbnail: t.album.images[0]?.url || `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`,
+            duration:  Math.floor(t.duration_ms / 1000),
+          };
+        })
+      );
+      for (const r of resolved) {
+        if (r.status === 'fulfilled' && r.value) results.push(r.value);
+      }
+    }
+
+    console.log(`[SPOTIFY] → ${results.length} résultats résolus`);
+    res.json({ results });
+  } catch (e) {
+    console.error('[SPOTIFY] Erreur:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Best thumbnail ────────────────────────────────────────────────────────────
 function bestThumb(item) {
   if (Array.isArray(item.thumbnails) && item.thumbnails.length) {

@@ -100,10 +100,10 @@ class _NavBar extends StatelessWidget {
   const _NavBar({required this.currentIndex, required this.onTap});
 
   static const List<_NavItem> _items = [
-    _NavItem(icon: Icons.home_rounded,          label: 'Home'),
-    _NavItem(icon: Icons.grid_view_rounded,     label: 'Explore'),
-    _NavItem(icon: Icons.search_rounded,        label: 'Search'),
-    _NavItem(icon: Icons.library_music_rounded, label: 'Library'),
+    _NavItem(icon: Icons.home_rounded,          label: 'Accueil'),
+    _NavItem(icon: Icons.grid_view_rounded,     label: 'Explorer'),
+    _NavItem(icon: Icons.search_rounded,        label: 'Recherche'),
+    _NavItem(icon: Icons.library_music_rounded, label: 'Bibliothèque'),
   ];
 
   @override
