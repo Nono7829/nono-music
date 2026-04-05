@@ -7,7 +7,6 @@ const http         = require('http');
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
-// Utiliser la commande système yt-dlp (installée via pip dans le Dockerfile)
 const YT_DLP = 'yt-dlp';
 
 app.use(cors({
@@ -139,6 +138,53 @@ app.get('/stream/:videoId', async (req, res) => {
   }
 });
 
+// ── GET /import-playlist?url=... ──────────────────────────────────────────────
+app.get('/import-playlist', (req, res) => {
+  const url = (req.query.url || '').trim();
+  if (!url) return res.status(400).json({ error: 'Missing parameter: url' });
+
+  console.log(`[IMPORT] "${url}"`);
+
+  const safeUrl = url.replace(/"/g, '\\"');
+  const cmd = [
+    `"${YT_DLP}"`,
+    `"${safeUrl}"`,
+    '--dump-json',
+    '--flat-playlist',
+    '--no-warnings',
+    '--ignore-errors',
+  ].join(' ');
+
+  exec(cmd, { maxBuffer: 1024 * 1024 * 50, timeout: 120000 }, (err, stdout, stderr) => {
+    if (stderr) console.warn('[IMPORT] stderr:', stderr.substring(0, 200));
+    if (err && !stdout) {
+      console.error('[IMPORT] exec error:', err.message);
+      return res.status(500).json({ error: 'yt-dlp failed', details: err.message });
+    }
+
+    const tracks = [];
+    for (const line of stdout.split('\n').filter(Boolean)) {
+      try {
+        const item = JSON.parse(line);
+        const id = item.id ?? null;
+        if (!id || id.length !== 11) continue;
+        const dur = item.duration ?? 0;
+        if (dur > 1800) continue;
+        tracks.push({
+          id,
+          title:     item.title    ?? 'Titre inconnu',
+          artist:    item.uploader ?? item.channel ?? 'Artiste inconnu',
+          duration:  dur,
+          thumbnail: bestThumb(item),
+        });
+      } catch (_) {}
+    }
+
+    console.log(`[IMPORT] → ${tracks.length} tracks`);
+    return res.json({ tracks });
+  });
+});
+
 // ── Stream URL resolution with cache ─────────────────────────────────────────
 function getStreamUrl(videoId) {
   const cached = STREAM_CACHE.get(videoId);
@@ -229,7 +275,6 @@ app.get('/spotify-search', async (req, res) => {
 
     console.log(`[SPOTIFY] "${q}" → ${tracks.length} pistes, résolution YouTube…`);
 
-    // Résolution en parallèle (limité à 5 simultanés pour ne pas surcharger)
     const BATCH = 5;
     const results = [];
     for (let i = 0; i < tracks.length; i += BATCH) {
@@ -277,4 +322,5 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ Nono Music backend → http://0.0.0.0:${PORT}`);
   console.log(`   yt-dlp: ${YT_DLP}`);
   console.log(`   Cache TTL: 4h`);
+  console.log(`   Spotify: ${process.env.SPOTIFY_CLIENT_ID ? '✅ configuré' : '❌ non configuré'}`);
 });

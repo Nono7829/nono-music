@@ -377,24 +377,45 @@ class MusicProvider with ChangeNotifier {
       if (myId == _loadId) {
         _isPlaying = false;
         _isAudioLoading = false;
+        _currentSong = null;
         notifyListeners();
       }
     }
   }
 
   Future<String> _resolveSource(Song song) async {
+    // 1. Fichier local (téléchargé)
     try {
       final dir = await getApplicationDocumentsDirectory();
       final local = File('${dir.path}/${song.id}.m4a');
       if (await local.exists()) {
         final size = await local.length();
         if (size > 50000) return local.path;
-        // Corrupt file — remove it.
+        // Fichier corrompu — suppression
         await local.delete();
         _downloadedSongs.removeWhere((s) => s.id == song.id);
         unawaited(_saveDownloads());
       }
     } catch (_) {}
+
+    // 2. URL directe YouTube via /stream (meilleur support Windows)
+    try {
+      final resp = await http
+          .get(Uri.parse('$_baseUrl/stream/${song.id}'))
+          .timeout(const Duration(seconds: 20));
+      if (resp.statusCode == 200) {
+        final body = jsonDecode(resp.body) as Map<String, dynamic>;
+        final url = body['url'] as String?;
+        if (url != null && url.isNotEmpty) {
+          debugPrint('[AUDIO] URL directe obtenue pour ${song.id}');
+          return url;
+        }
+      }
+    } catch (e) {
+      debugPrint('[AUDIO] /stream échoué, fallback proxy: $e');
+    }
+
+    // 3. Fallback proxy
     return '$_baseUrl/proxy/${song.id}';
   }
 
@@ -617,6 +638,7 @@ class MusicProvider with ChangeNotifier {
     _player.dispose();
     super.dispose();
   }
+
   // ── Mode source ───────────────────────────────────────────────────────────────
   bool _useSpotify = false;
   bool get useSpotify => _useSpotify;
@@ -628,24 +650,21 @@ class MusicProvider with ChangeNotifier {
   }
 
   Future<List<Song>> importPlaylistFromUrl(String url) async {
-  try {
-    final response = await http.get(
-      Uri.parse('$_baseUrl/import-playlist?url=${Uri.encodeComponent(url)}'),
-    );
-    if (response.statusCode == 200) {
-      final data = json.decode(response.body);
-      final List<Song> tracks = (data['tracks'] as List)
-          .map((t) => Song.fromJson(t))
-          .toList();
-      return tracks;
-    } else {
-      throw Exception('Erreur serveur: ${response.statusCode}');
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/import-playlist?url=${Uri.encodeComponent(url)}'),
+      );
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final List<Song> tracks =
+            (data['tracks'] as List).map((t) => Song.fromJson(t)).toList();
+        return tracks;
+      } else {
+        throw Exception('Erreur serveur: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('Erreur importPlaylistFromUrl: $e');
+      rethrow;
     }
-  } catch (e) {
-    debugPrint('Erreur importPlaylistFromUrl: $e');
-    rethrow;
   }
 }
-
-}
-
