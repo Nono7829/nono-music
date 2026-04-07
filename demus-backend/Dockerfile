@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Installer yt-dlp globalement via pip (dernière version stable)
-RUN pip3 install yt-dlp --break-system-packages
+RUN pip3 install yt-dlp --upgrade --break-system-packages
 
 WORKDIR /app
 COPY package*.json ./
