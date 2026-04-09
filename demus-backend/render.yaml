@@ -1,13 +1,36 @@
+# Render deployment configuration for Nono Music backend
+# Docs: https://render.com/docs/yaml-spec
 services:
   - type: web
     name: nono-music-backend
     runtime: docker
     dockerfilePath: ./Dockerfile
     healthCheckPath: /health
+    # Render free tier keeps connections alive — no server-side timeout to set.
+    # The bot ping (already configured) prevents idle spin-down.
     envVars:
+      # ── Spotify API (required for unified-search Spotify enrichment) ─────────
       - key: SPOTIFY_CLIENT_ID
-        sync: false
+        sync: false        # set manually in Render dashboard
       - key: SPOTIFY_CLIENT_SECRET
-        sync: false
+        sync: false        # set manually in Render dashboard
+
+      # ── CORS (comma-separated origins, or '*' for open) ──────────────────────
       - key: ALLOWED_ORIGINS
-        sync: false
+        sync: false        # e.g. "https://yourapp.com,capacitor://localhost"
+
+      # ── Timeout overrides (optional — defaults shown below) ──────────────────
+      # YTDLP_SEARCH_TIMEOUT_MS  : yt-dlp search command timeout (default: 28000)
+      # YTDLP_STREAM_TIMEOUT_MS  : yt-dlp stream URL resolution timeout (default: 22000)
+      # CDN_CONNECT_TIMEOUT_MS   : CDN initial connection timeout for /proxy (default: 15000)
+      # UNIFIED_SEARCH_TIMEOUT_MS: Total budget for /unified-search (default: 30000)
+      #
+      # Uncomment and set values to override:
+      # - key: YTDLP_SEARCH_TIMEOUT_MS
+      #   value: "28000"
+      # - key: YTDLP_STREAM_TIMEOUT_MS
+      #   value: "22000"
+      # - key: CDN_CONNECT_TIMEOUT_MS
+      #   value: "15000"
+      # - key: UNIFIED_SEARCH_TIMEOUT_MS
+      #   value: "30000"

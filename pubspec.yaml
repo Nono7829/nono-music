@@ -2,7 +2,6 @@ name: nono_music
 description: Nono Music - lecteur musical personnel avec sync cloud
 
 publish_to: 'none'
-
 version: 1.0.0+1
 
 environment:
@@ -11,33 +10,20 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  
-  # State management
   provider: ^6.1.0
-  
-  # Network
   http: ^1.2.0
   dio: ^5.4.1
-  
-  # Audio
+  path: ^1.9.0 # Ajouté pour la gestion des fichiers
   just_audio: ^0.10.0
-  just_audio_windows: 0.2.2
+  just_audio_windows: ^0.2.0
   just_audio_background: ^0.0.1-beta.11
   audio_service: ^0.18.12
   rxdart: ^0.27.7
-  
-  # Storage
   path_provider: ^2.1.2
   shared_preferences: ^2.2.2
-  
-  # Authentication & Database
   supabase_flutter: ^2.0.0
   google_sign_in: ^6.1.0
-  
-  # Image picking
   image_picker: ^1.0.7
-  
-  # Utils
   uuid: ^4.3.3
 
 dev_dependencies:
