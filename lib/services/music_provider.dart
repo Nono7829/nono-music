@@ -38,7 +38,7 @@ class MusicProvider with ChangeNotifier {
   List<Song> _favoriteSongs = [];
   List<Song> _recentlyPlayed = [];
   List<Map<String, dynamic>> _playlists = [];
-  List<Song> _downloadedSongs = [];
+  final List<Song> _downloadedSongs = [];
   final Map<String, double> _downloadProgress = {};
 
   List<Song> _queue = [];
@@ -54,13 +54,12 @@ class MusicProvider with ChangeNotifier {
       _currentAudioState = state;
       notifyListeners();
     });
-
-    // FIX : Méthode de volume sécurisée
-    void setVolume(double volume) {
-      _engine.setVolumeSafe(volume);
-    }
   }
 
+  // ── Volume ───────────────────────────────────────────────────────────────
+  void setVolume(double volume) => _engine.setVolumeSafe(volume);
+
+  // ── Supabase sync ────────────────────────────────────────────────────────
   Future<void> loadFromSupabase() async {
     if (!_auth.isAuthenticated) return;
     try {
@@ -73,6 +72,7 @@ class MusicProvider with ChangeNotifier {
     }
   }
 
+  // ── Search ───────────────────────────────────────────────────────────────
   Future<void> searchUnified(String query) async {
     _isLoading = true;
     _errorMessage = null;
@@ -81,14 +81,17 @@ class MusicProvider with ChangeNotifier {
     try {
       final uri = Uri.parse('$_baseUrl/unified-search')
           .replace(queryParameters: {'q': query});
-      final resp = await http.get(uri);
+      final resp = await http.get(uri).timeout(const Duration(seconds: 30));
       if (resp.statusCode == 200) {
         final body = jsonDecode(resp.body);
         _songs =
             (body['results'] as List).map((s) => Song.fromJson(s)).toList();
+      } else {
+        _errorMessage = 'Erreur serveur : ${resp.statusCode}';
       }
     } catch (e) {
-      _errorMessage = "Erreur de recherche";
+      _errorMessage = 'Impossible de contacter le serveur';
+      debugPrint('[SEARCH_ERROR] $e');
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -97,36 +100,42 @@ class MusicProvider with ChangeNotifier {
 
   void searchYouTube(String query) => searchUnified(query);
 
-  // ── PLAYBACK STABILIZED ──────────────────────────────────────────────────────
-Future<void> playSong(Song song, {List<Song>? queue}) async {
+  // ── Playback ─────────────────────────────────────────────────────────────
+  Future<void> playSong(Song song, {List<Song>? queue}) async {
     _currentSong = song;
     _queue = queue ?? [song];
     _currentIndex = _queue.indexWhere((s) => s.id == song.id);
     if (_currentIndex == -1) _currentIndex = 0;
+    notifyListeners();
+
+    // Ajouter à l'historique
+    _recentlyPlayed.removeWhere((s) => s.id == song.id);
+    _recentlyPlayed.insert(0, song);
+    if (_recentlyPlayed.length > 30) _recentlyPlayed = _recentlyPlayed.take(30).toList();
+    _saveRecentlyPlayed();
 
     try {
       String path = await _resolveSource(song);
-      
-      // VALIDATION CRUCIALE : Si c'est un fichier local, on vérifie qu'il n'est pas corrompu
+
       if (!path.startsWith('http')) {
         final file = File(path);
         if (!await file.exists() || await file.length() < 1000) {
-          debugPrint('[AUDIO] Fichier local corrompu, fallback sur stream');
+          debugPrint('[AUDIO] Local file corrupted, fallback to stream');
           path = '$_baseUrl/proxy/${song.id}';
         }
       }
 
-      final source = path.startsWith('http') 
-          ? AudioSource.uri(Uri.parse(path)) 
+      final source = path.startsWith('http')
+          ? AudioSource.uri(Uri.parse(path))
           : AudioSource.file(path);
 
       await _engine.loadAndPlay(source);
     } catch (e) {
-      _errorMessage = "Erreur de lecture";
+      _errorMessage = 'Lecture impossible';
       notifyListeners();
     }
   }
-  
+
   void playNext() {
     if (_currentIndex < _queue.length - 1) {
       playSong(_queue[_currentIndex + 1], queue: _queue);
@@ -145,6 +154,7 @@ Future<void> playSong(Song song, {List<Song>? queue}) async {
     }
   }
 
+  // ── Favorites ────────────────────────────────────────────────────────────
   bool isFavorite(Song song) => _favoriteSongs.any((s) => s.id == song.id);
 
   void toggleFavorite(Song song) {
@@ -157,6 +167,7 @@ Future<void> playSong(Song song, {List<Song>? queue}) async {
     notifyListeners();
   }
 
+  // ── Downloads ────────────────────────────────────────────────────────────
   bool isDownloaded(Song song) => _downloadedSongs.any((s) => s.id == song.id);
 
   Future<void> downloadSong(Song song, {VoidCallback? onComplete}) async {
@@ -186,6 +197,7 @@ Future<void> playSong(Song song, {List<Song>? queue}) async {
     notifyListeners();
   }
 
+  // ── Playlists ─────────────────────────────────────────────────────────────
   void createPlaylist(String name) {
     _playlists.add({
       'id': DateTime.now().millisecondsSinceEpoch.toString(),
@@ -241,17 +253,19 @@ Future<void> playSong(Song song, {List<Song>? queue}) async {
   bool isPlaylistFullyDownloaded(String id) {
     final pl = _playlists.firstWhere((p) => p['id'] == id, orElse: () => {});
     if (pl.isEmpty) return false;
-    return (pl['songs'] as List<Song>).every(isDownloaded);
+    final songs = pl['songs'] as List<Song>;
+    return songs.isNotEmpty && songs.every(isDownloaded);
   }
 
   Future<void> downloadPlaylist(String id, {VoidCallback? onComplete}) async {
     final songs = await getPlaylistSongs(id);
-    for (var s in songs) {
+    for (final s in songs) {
       if (!isDownloaded(s)) await downloadSong(s);
     }
     if (onComplete != null) onComplete();
   }
 
+  // ── Import ────────────────────────────────────────────────────────────────
   Future<List<Song>> importPlaylistFromUrl(String url) async {
     final resp = await http.get(Uri.parse('$_baseUrl/import-playlist')
         .replace(queryParameters: {'url': url}));
@@ -259,9 +273,10 @@ Future<void> playSong(Song song, {List<Song>? queue}) async {
       final data = jsonDecode(resp.body);
       return (data['tracks'] as List).map((s) => Song.fromJson(s)).toList();
     }
-    throw Exception("Import failed");
+    throw Exception('Import failed: ${resp.statusCode}');
   }
 
+  // ── Queue ─────────────────────────────────────────────────────────────────
   void addToQueue(Song song) {
     if (!_queue.any((s) => s.id == song.id)) {
       _queue.add(song);
@@ -269,6 +284,7 @@ Future<void> playSong(Song song, {List<Song>? queue}) async {
     }
   }
 
+  // ── Streams ───────────────────────────────────────────────────────────────
   Stream<PositionData> get positionDataStream => Rx.combineLatest3(
         _engine.player.positionStream,
         _engine.player.bufferedPositionStream,
@@ -276,6 +292,7 @@ Future<void> playSong(Song song, {List<Song>? queue}) async {
         (pos, buf, dur) => PositionData(pos, buf, dur ?? Duration.zero),
       );
 
+  // ── Source resolution ─────────────────────────────────────────────────────
   Future<String> _resolveSource(Song song) async {
     if (!kIsWeb) {
       final dir = await getApplicationDocumentsDirectory();
@@ -285,39 +302,96 @@ Future<void> playSong(Song song, {List<Song>? queue}) async {
     return '$_baseUrl/proxy/${song.id}';
   }
 
+  // ── Persistence ───────────────────────────────────────────────────────────
   Future<void> _saveFavorites() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('nono_favorites',
-        jsonEncode(_favoriteSongs.map((s) => s.toJson()).toList()));
+    await prefs.setString(
+      'nono_favorites',
+      jsonEncode(_favoriteSongs.map((s) => s.toJson()).toList()),
+    );
   }
 
   Future<void> _saveDownloads() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('downloaded_songs',
-        jsonEncode(_downloadedSongs.map((s) => s.toJson()).toList()));
+    await prefs.setString(
+      'downloaded_songs',
+      jsonEncode(_downloadedSongs.map((s) => s.toJson()).toList()),
+    );
   }
 
   Future<void> _savePlaylists() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('nono_playlists', jsonEncode(_playlists));
+    // Sérialisation explicite : jsonEncode ne sait pas sérialiser Song directement
+    final serializable = _playlists.map((p) => {
+      'id': p['id'],
+      'name': p['name'],
+      'coverUrl': p['coverUrl'],
+      'songs': (p['songs'] as List<Song>).map((s) => s.toJson()).toList(),
+    }).toList();
+    await prefs.setString('nono_playlists', jsonEncode(serializable));
   }
 
   Future<void> _saveRecentlyPlayed() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('nono_recently_played',
-        jsonEncode(_recentlyPlayed.map((s) => s.toJson()).toList()));
+    await prefs.setString(
+      'nono_recently_played',
+      jsonEncode(_recentlyPlayed.map((s) => s.toJson()).toList()),
+    );
   }
 
   Future<void> _loadAllData() async {
-    // FIX: Suppression de la variable 'prefs' qui n'était pas utilisée ici
     try {
-      // Logique de chargement...
+      final prefs = await SharedPreferences.getInstance();
+
+      // Favoris
+      final favsJson = prefs.getString('nono_favorites');
+      if (favsJson != null) {
+        _favoriteSongs = (jsonDecode(favsJson) as List)
+            .map((s) => Song.fromJson(s as Map<String, dynamic>))
+            .toList();
+      }
+
+      // Téléchargements
+      final dlJson = prefs.getString('downloaded_songs');
+      if (dlJson != null) {
+        _downloadedSongs.addAll(
+          (jsonDecode(dlJson) as List)
+              .map((s) => Song.fromJson(s as Map<String, dynamic>)),
+        );
+      }
+
+      // Playlists
+      final plJson = prefs.getString('nono_playlists');
+      if (plJson != null) {
+        final raw = jsonDecode(plJson) as List;
+        _playlists = raw.map((p) {
+          final map = p as Map<String, dynamic>;
+          final songs = (map['songs'] as List? ?? [])
+              .map((s) => Song.fromJson(s as Map<String, dynamic>))
+              .toList();
+          return <String, dynamic>{
+            'id': map['id'],
+            'name': map['name'],
+            'coverUrl': map['coverUrl'],
+            'songs': songs,
+          };
+        }).toList();
+      }
+
+      // Historique récent
+      final recentJson = prefs.getString('nono_recently_played');
+      if (recentJson != null) {
+        _recentlyPlayed = (jsonDecode(recentJson) as List)
+            .map((s) => Song.fromJson(s as Map<String, dynamic>))
+            .toList();
+      }
     } catch (e) {
       debugPrint('[PREFS] Load error: $e');
     }
     notifyListeners();
   }
 
+  // ── Getters ───────────────────────────────────────────────────────────────
   AudioPlayer get audioPlayer => _engine.player;
   AudioState get audioState => _currentAudioState;
   Song? get currentSong => _currentSong;

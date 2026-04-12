@@ -1,0 +1,18 @@
+{
+  "version": "0.2",
+  "language": "en,fr",
+  "words": [
+    "nono", "nonomusic", "demus", "ytdlp", "yt-dlp",
+    "supabase", "riverpod", "prefs", "songid", "coverurl",
+    "Weeknd", "Eilish", "dedup", "parentheticals",
+    "Accueil", "Bibliothèque", "titres", "Fichier", "corrompu",
+    "CRUCIALE", "vérifie", "chargement", "Logique", "utilisée",
+    "Éviter", "coupure", "Garder", "fonctions", "existantes",
+    "Insère", "état", "Erreur", "YTDLP"
+  ],
+  "ignorePaths": [
+    "node_modules/**",
+    ".dart_tool/**",
+    "build/**"
+  ]
+}

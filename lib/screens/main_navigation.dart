@@ -15,8 +15,9 @@ import 'library_screen.dart';
 class MainNavigation extends StatefulWidget {
   const MainNavigation({super.key});
 
-  static _MainNavigationState? of(BuildContext context) =>
-      context.findAncestorStateOfType<_MainNavigationState>();
+// ignore: library_private_types_in_public_api
+static _MainNavigationState? of(BuildContext context) =>
+    context.findAncestorStateOfType<_MainNavigationState>();
 
   @override
   State<MainNavigation> createState() => _MainNavigationState();

@@ -145,7 +145,7 @@ void main() {
 
   group('JSON roundtrip', () {
     test('Song serialized and deserialized matches original', () {
-      final original = Song(
+      const original = Song(
         id:       'roundtrip000',
         title:    'Test',
         artist:   'Artist',

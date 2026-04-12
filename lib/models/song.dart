@@ -18,7 +18,7 @@ class Song {
       id:       _str(json['id']),
       title:    _str(json['title'],     fallback: 'Titre inconnu'),
       artist:   _str(json['artist'],    fallback: 'Artiste inconnu'),
-      coverUrl: _str(json['thumbnail']),
+      coverUrl: _str(json['thumbnail'] ?? json['coverUrl']),
       duration: (json['duration'] as num?)?.toInt() ?? 0,
     );
   }
