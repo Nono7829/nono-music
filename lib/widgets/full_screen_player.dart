@@ -315,6 +315,7 @@ class _ControlRow extends StatelessWidget {
 class _VolumeSlider extends StatelessWidget {
   const _VolumeSlider();
 
+// Dans le widget _VolumeSlider
   @override
   Widget build(BuildContext context) {
     return Row(
@@ -327,18 +328,14 @@ class _VolumeSlider extends StatelessWidget {
               final vol = snap.data ?? 1.0;
               return SliderTheme(
                 data: SliderTheme.of(context).copyWith(
-                  trackHeight: 3,
-                  thumbShape:
-                      const RoundSliderThumbShape(enabledThumbRadius: 6),
-                  overlayShape: SliderComponentShape.noOverlay,
-                  activeTrackColor: Colors.white38,
-                  inactiveTrackColor: Colors.white12,
-                  thumbColor: Colors.white38,
-                ),
+                    // ... styles ...
+                    ),
                 child: Slider(
                   value: vol,
-                  onChanged: (v) =>
-                      context.read<MusicProvider>().audioPlayer.setVolume(v),
+                  onChanged: (v) {
+                    // FIX : On utilise la méthode sécurisée du provider
+                    context.read<MusicProvider>().setVolume(v);
+                  },
                 ),
               );
             },
